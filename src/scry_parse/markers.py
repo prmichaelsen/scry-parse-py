@@ -66,32 +66,34 @@ class ParseResult:
 
 
 # ---------------------------------------------------------------------------
-# Comment-prefix detection
+# Comment-prefix detection (inference-based, FR1 universality)
 # ---------------------------------------------------------------------------
 
-# Maps sentinel prefix → (open_prefix, body_strip_prefix, close_suffix)
-# For markdown: body lines are raw (no prefix strip); open/close include <!-- -->
-_COMMENT_STYLES: list[tuple[str, str | None, str | None]] = [
-    # (detect_prefix, body_line_prefix_to_strip, close_suffix_hint)
-    ("<!-- ", None, " -->"),   # HTML/markdown — body is raw, strip nothing
-    ("# ",   "# ",  None),     # Python / shell
-    ("// ",  "// ", None),     # TypeScript / JS
-    ("-- ",  "-- ", None),     # SQL
-    (";; ",  ";; ", None),     # Lisp double-semi
-    ("; ",   "; ",  None),     # Lisp single-semi
-]
+# Matches the portion of a line before the first YAML key
+_KEY_RE = re.compile(r"^(.*?)([A-Za-z_][A-Za-z0-9_\-]*\s*:)")
+# Valid comment-prefix characters: whitespace, #, /, *, -, >, ;
+_PREFIX_VALID = re.compile(r"^[\s#/*\->;]*$")
 
 
-def _detect_comment_style(sentinel_line: str) -> tuple[str | None, str | None]:
-    """Return (body_strip_prefix, close_suffix) from the opening sentinel line.
+def _infer_prefix(lines: list[str]) -> str:
+    """Infer comment prefix from the first body line containing a YAML key.
 
-    body_strip_prefix: prefix to strip from each body line (None = strip nothing)
-    close_suffix: suffix that appears on the closing sentinel line (e.g. ' -->')
+    Algorithm (from scry reference implementation):
+      1. Scan body lines for the first one whose non-key portion is purely
+         whitespace + comment characters.
+      2. That portion is the inferred prefix.
+
+    This handles all comment styles — HTML, Python, TS/JS, SQL, Lisp, JSDoc,
+    C-block, OCaml, Haskell, PowerShell — without enumeration.
     """
-    for detect, body_prefix, close_suffix in _COMMENT_STYLES:
-        if detect in sentinel_line:
-            return body_prefix, close_suffix
-    return None, None
+    for line in lines:
+        m = _KEY_RE.match(line)
+        if not m:
+            continue
+        candidate = m.group(1)
+        if _PREFIX_VALID.match(candidate):
+            return candidate
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -113,9 +115,9 @@ _BIND_CLOSE_RE = re.compile(r'@scry\.bind\.end\b')
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _strip_body_prefix(line: str, prefix: str | None) -> str:
+def _strip_body_prefix(line: str, prefix: str) -> str:
     """Strip the comment prefix from a single body line."""
-    if prefix is None:
+    if not prefix:
         return line
     if line.startswith(prefix):
         return line[len(prefix):]
@@ -126,9 +128,16 @@ def _strip_body_prefix(line: str, prefix: str | None) -> str:
     return line
 
 
-def _clean_body(lines: list[str], body_strip_prefix: str | None) -> str:
-    """Strip comment prefixes from all body lines and join."""
-    cleaned = [_strip_body_prefix(ln, body_strip_prefix) for ln in lines]
+def _clean_body(lines: list[str], body_strip_prefix: str | None = None) -> str:
+    """Strip comment prefixes from all body lines and join.
+
+    If body_strip_prefix is not given, the prefix is inferred from the first
+    body line that looks like a YAML key — this makes block-comment styles
+    (JSDoc, C /* */, OCaml (* *), Haskell {- -}, PowerShell <# #>, etc.)
+    work without any enumeration.
+    """
+    prefix = body_strip_prefix if body_strip_prefix is not None else _infer_prefix(lines)
+    cleaned = [_strip_body_prefix(ln, prefix) for ln in lines]
     return "".join(cleaned)
 
 
@@ -233,77 +242,6 @@ def _inside_any_span(
 # ---------------------------------------------------------------------------
 # Binding marker parser
 # ---------------------------------------------------------------------------
-
-def _parse_bindings(
-    lines: list[str],
-    block_spans: list[tuple[int, int, str, str]],
-    body_strip_prefix: str | None,
-    file: str,
-) -> list[BindingMarker]:
-    """Scan lines for @scry.bind markers.
-
-    FR3: skip any bind line that falls inside a declarative block span.
-    FR2: forward-scan to determine block vs single-line form.
-    """
-    result: list[BindingMarker] = []
-    i = 0
-    while i < len(lines):
-        line_1idx = i + 1
-        line = lines[i]
-
-        m = _BIND_OPEN_RE.search(line)
-        if not m:
-            i += 1
-            continue
-
-        # FR3 exclusion
-        if _inside_any_span(line_1idx, block_spans):
-            i += 1
-            continue
-
-        rest = m.group(1).strip()
-
-        # Forward-scan disambiguation (FR2):
-        # Look for @scry.bind.end before the next @scry.bind
-        is_block = False
-        close_line_idx = None
-        j = i + 1
-        while j < len(lines):
-            if _BIND_CLOSE_RE.search(lines[j]):
-                is_block = True
-                close_line_idx = j
-                break
-            if _BIND_OPEN_RE.search(lines[j]):
-                # Next bind found before close → single-line form
-                break
-            j += 1
-
-        if is_block and close_line_idx is not None:
-            # Block form: extract body lines between open and close
-            body_lines = lines[i + 1: close_line_idx]
-            body_text = _clean_body(body_lines, body_strip_prefix).strip()
-            span: tuple[int, int] | None = (line_1idx, close_line_idx + 1)
-            # Parse local_id, ref, comment from rest (open line) + body
-            local_id, ref, comment = _parse_bind_content(rest, body_text)
-            end_line = close_line_idx + 1
-            i = close_line_idx + 1
-        else:
-            # Single-line form
-            body_text = ""
-            span = None
-            local_id, ref, comment = _parse_bind_content(rest, "")
-            end_line = line_1idx
-            i += 1
-
-        if not local_id or not ref:
-            continue
-
-        # Multi-anchor expansion (FR2): ref may contain {id}#{A},{B},{C}
-        bindings = _expand_binding(local_id, ref, comment, file, line_1idx, span)
-        result.extend(bindings)
-
-    return result
-
 
 def _parse_bind_content(
     rest: str, body_text: str
@@ -412,11 +350,10 @@ def parse_markers(
 
     # Second pass: parse each block
     for start_1idx, end_1idx, kind, sentinel_line in block_spans:
-        body_strip_prefix, _close_suffix = _detect_comment_style(sentinel_line)
-
         # Body lines (between open and close, exclusive)
         body_lines = lines[start_1idx: end_1idx - 1]  # 0-indexed slice
-        body_text = _clean_body(body_lines, body_strip_prefix)
+        # Prefix inferred from body content — handles any comment style (FR1)
+        body_text = _clean_body(body_lines)
 
         if kind == "anchor":
             _parse_anchor_block(
@@ -428,11 +365,7 @@ def parse_markers(
                 body_text, file, (start_1idx, end_1idx), result
             )
 
-    # Third pass: parse binding markers
-    bindings = _parse_bindings(lines, block_spans, None, file)
-
-    # For bindings, we need to infer the body_strip_prefix per bind line.
-    # Re-do with proper per-line prefix detection.
+    # Third pass: parse binding markers (prefix inferred per bind body)
     result.bindings = _parse_bindings_with_prefix(lines, block_spans, file)
 
     return result
@@ -460,8 +393,6 @@ def _parse_bindings_with_prefix(
             i += 1
             continue
 
-        # Detect comment style from this line
-        body_strip_prefix, _close_suffix = _detect_comment_style(line)
         rest = m.group(1).strip()
 
         # Forward-scan disambiguation (FR2)
@@ -479,7 +410,7 @@ def _parse_bindings_with_prefix(
 
         if is_block and close_line_idx is not None:
             body_lines = lines[i + 1: close_line_idx]
-            body_text = _clean_body(body_lines, body_strip_prefix).strip()
+            body_text = _clean_body(body_lines).strip()
             span: tuple[int, int] | None = (line_1idx, close_line_idx + 1)
             local_id, ref, comment = _parse_bind_content(rest, body_text)
             i = close_line_idx + 1

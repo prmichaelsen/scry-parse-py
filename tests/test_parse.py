@@ -870,3 +870,189 @@ def test_parse_result_file_field():
 def test_parse_result_anchor_file_field():
     result = parse_markers(ANCHOR_MARKDOWN, file="src/auth.py")
     assert result.anchors[0].file == "src/auth.py"
+
+
+# ---------------------------------------------------------------------------
+# Block-comment styles (v1.0.1 fix — FR1 universality)
+# ---------------------------------------------------------------------------
+
+def test_jsdoc_entry_marker():
+    """JSDoc /** ... */ with * continuation lines."""
+    content = """\
+/**
+ * @scry.entry
+ * id: design.foo~12345678
+ * kind: design
+ * summary: JSDoc block entry
+ * status: active
+ * weight: 0.5
+ * tags: []
+ * rationale: >
+ *   JSDoc rationale
+ * applies: testing
+ * seeded_questions: []
+ * @scry.entry.end
+ */
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    e = result.entries[0]
+    assert e.id == "design.foo~12345678"
+    assert e.kind == "design"
+    assert "JSDoc block entry" in e.summary
+    assert e.status == "active"
+
+
+def test_c_block_entry_marker():
+    """C-style /* ... */ with indented body."""
+    content = """\
+/*
+   @scry.entry
+   id: design.foo~12345678
+   kind: design
+   summary: C block entry
+   status: active
+   weight: 0.5
+   tags: []
+   rationale: >
+     C block rationale
+   applies: testing
+   seeded_questions: []
+   @scry.entry.end
+*/
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    e = result.entries[0]
+    assert e.id == "design.foo~12345678"
+    assert "C block entry" in e.summary
+
+
+def test_c_block_anchor_marker():
+    """C-style /* ... */ anchor."""
+    content = """\
+/*
+   @scry.anchor auth-check~f1e2d3c4
+   description: C-block anchor description
+   seeded_questions:
+     - What happens here?
+   @scry.anchor.end
+*/
+"""
+    result = parse_markers(content)
+    assert len(result.anchors) == 1
+    a = result.anchors[0]
+    assert a.name == "auth-check~f1e2d3c4"
+    assert "C-block anchor description" in a.description
+
+
+def test_ocaml_block_entry_marker():
+    """OCaml (* ... *) block comment."""
+    content = """\
+(*
+   @scry.entry
+   id: design.foo~12345678
+   kind: design
+   summary: OCaml block entry
+   status: draft
+   weight: 0.5
+   tags: []
+   rationale: >
+     OCaml rationale
+   applies: testing
+   seeded_questions: []
+   @scry.entry.end
+*)
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    assert result.entries[0].id == "design.foo~12345678"
+    assert "OCaml block entry" in result.entries[0].summary
+
+
+def test_haskell_block_entry_marker():
+    """Haskell {- ... -} block comment."""
+    content = """\
+{-
+   @scry.entry
+   id: design.foo~12345678
+   kind: design
+   summary: Haskell block entry
+   status: draft
+   weight: 0.5
+   tags: []
+   rationale: >
+     Haskell rationale
+   applies: testing
+   seeded_questions: []
+   @scry.entry.end
+-}
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    assert result.entries[0].id == "design.foo~12345678"
+    assert "Haskell block entry" in result.entries[0].summary
+
+
+def test_powershell_block_entry_marker():
+    """PowerShell <# ... #> block comment."""
+    content = """\
+<#
+   @scry.entry
+   id: design.foo~12345678
+   kind: design
+   summary: PowerShell block entry
+   status: draft
+   weight: 0.5
+   tags: []
+   rationale: >
+     PowerShell rationale
+   applies: testing
+   seeded_questions: []
+   @scry.entry.end
+#>
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    assert result.entries[0].id == "design.foo~12345678"
+    assert "PowerShell block entry" in result.entries[0].summary
+
+
+def test_jsdoc_bind_marker():
+    """JSDoc-style bind marker with * continuation."""
+    content = """\
+/**
+ * @scry.bind impl-auth~a1b2c3d4 spec.auth~xyz89012#FR3
+ * This implements JWT validation per FR3.
+ * @scry.bind.end
+ */
+"""
+    result = parse_markers(content)
+    assert len(result.bindings) == 1
+    b = result.bindings[0]
+    assert b.local_id == "impl-auth~a1b2c3d4"
+    assert b.ref == "spec.auth~xyz89012#FR3"
+    assert b.comment is not None
+    assert "JWT validation" in b.comment
+
+
+def test_block_comment_existing_line_styles_still_work():
+    """Regression: existing line-comment styles (Python, TS, SQL, Lisp) still parse."""
+    styles = [
+        ("# @scry.entry\n# id: design.foo~12345678\n# kind: design\n# summary: Python\n"
+         "# status: active\n# weight: 0.5\n# tags: []\n# rationale: >\n#   r\n"
+         "# applies: t\n# seeded_questions: []\n# @scry.entry.end\n"),
+        ("// @scry.entry\n// id: design.foo~12345678\n// kind: design\n// summary: TS\n"
+         "// status: active\n// weight: 0.5\n// tags: []\n// rationale: >\n//   r\n"
+         "// applies: t\n// seeded_questions: []\n// @scry.entry.end\n"),
+        ("-- @scry.entry\n-- id: design.foo~12345678\n-- kind: design\n-- summary: SQL\n"
+         "-- status: active\n-- weight: 0.5\n-- tags: []\n-- rationale: >\n--   r\n"
+         "-- applies: t\n-- seeded_questions: []\n-- @scry.entry.end\n"),
+        (";; @scry.entry\n;; id: design.foo~12345678\n;; kind: design\n;; summary: Lisp\n"
+         ";; status: active\n;; weight: 0.5\n;; tags: []\n;; rationale: >\n;;   r\n"
+         ";; applies: t\n;; seeded_questions: []\n;; @scry.entry.end\n"),
+    ]
+    for content in styles:
+        result = parse_markers(content)
+        assert len(result.entries) == 1, f"Failed for:\n{content}"
+        assert result.entries[0].id == "design.foo~12345678"
