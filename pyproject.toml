@@ -15,7 +15,7 @@ dependencies = ["pyyaml>=6.0"]
 dev = ["pytest>=7.0"]
 
 [project.urls]
-Repository = "https://github.com/prmichaelsen/scry-spec"
+Repository = "https://github.com/prmichaelsen/scry-parse"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/scry_parse"]
