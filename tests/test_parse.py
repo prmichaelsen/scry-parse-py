@@ -149,20 +149,22 @@ seeded_questions: []
 # ---------------------------------------------------------------------------
 
 def test_5_fr3_bind_inside_entry_excluded():
+    # FR3: a @scry.bind marker whose line falls within a block marker span must not be indexed.
+    # Simulate a Python-style entry block that contains a bind line in the body.
     content = """\
-<!-- @scry.entry
-id: design.foo~a1b2c3d4
-kind: design
-summary: Example with bind inside body
-status: active
-weight: 0.5
-tags: []
-rationale: >
-  Test FR3
-applies: testing
-seeded_questions: []
-<!-- @scry.bind validate-jwt~a1b2c3d4 spec.auth~xyz89012#FR3 -->
-@scry.entry.end -->
+# @scry.entry
+# id: design.foo~a1b2c3d4
+# kind: design
+# summary: Example with bind inside body
+# status: active
+# weight: 0.5
+# tags: []
+# rationale: >
+#   Test FR3
+# applies: testing
+# seeded_questions: []
+# @scry.bind validate-jwt~a1b2c3d4 spec.auth~xyz89012#FR3
+# @scry.entry.end
 """
     result = parse_markers(content)
     # The bind inside the entry body must NOT be indexed

@@ -132,10 +132,21 @@ def _clean_body(lines: list[str], body_strip_prefix: str | None) -> str:
     return "".join(cleaned)
 
 
+# Matches any @scry.* marker token line that might appear inside a block body
+_SCRY_LINE_RE = re.compile(r'^\s*@scry\.\w+.*$', re.MULTILINE)
+
+
 def _parse_yaml(text: str) -> dict[str, Any] | None:
-    """Parse YAML safely; return None on failure."""
+    """Parse YAML safely; return None on failure.
+
+    Strips any embedded @scry.* marker lines before parsing (they can appear
+    inside block bodies due to FR3 positional exclusion — the parser doesn't
+    index them, but they can still break YAML).
+    """
+    # Remove embedded @scry.* lines to avoid YAML parse errors
+    cleaned = _SCRY_LINE_RE.sub("", text)
     try:
-        data = yaml.safe_load(text)
+        data = yaml.safe_load(cleaned)
     except yaml.YAMLError:
         return None
     if not isinstance(data, dict):
