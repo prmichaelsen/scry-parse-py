@@ -65,6 +65,11 @@ class ParseResult:
     anchors: list[AnchorMarker] = field(default_factory=list)
     bindings: list[BindingMarker] = field(default_factory=list)
 
+    @property
+    def markers(self) -> list[EntryMarker | AnchorMarker | BindingMarker]:
+        """All markers in parse order: entries + anchors + bindings."""
+        return [*self.entries, *self.anchors, *self.bindings]
+
 
 # ---------------------------------------------------------------------------
 # Comment-prefix inference (FR1 universality)
