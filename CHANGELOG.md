@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-05-14
+
+### Added
+
+- **`ParseResult.markers` convenience property** — returns all parsed markers in
+  a single flat list (`[*entries, *anchors, *bindings]`). Added to support FR13/FR14
+  test coverage (binding semantics and soft-reference validation). Callers that
+  iterate `entries`, `anchors`, and `bindings` individually are unaffected.
+
+---
+
 ## [1.0.2] - 2026-05-14
 
 ### Added
