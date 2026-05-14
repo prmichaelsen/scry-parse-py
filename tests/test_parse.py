@@ -1410,3 +1410,174 @@ def test_check_cycles_ignores_non_entry_markers():
     binding = BindingMarker(local_id="a~00000001", ref="design.b~00000002", comment=None, file="", offset=0, span=None)
     # No crash, no false cycles
     assert check_cycles([anchor, binding]) == []
+
+
+# ---------------------------------------------------------------------------
+# FR13: Binding Semantics — no restrictions on source→target combinations
+# ---------------------------------------------------------------------------
+
+def test_fr13_any_source_to_any_target_valid():
+    """FR13: any source can bind to any target — validator must not restrict.
+
+    Per spec: 'Implementations MUST NOT restrict valid binding combinations.'
+    """
+    from scry_parse.markers import BindingMarker
+
+    # Cross-kind combinations that might otherwise be restricted
+    combinations = [
+        ("fix~00000001", "spec.auth~a1b2c3d4"),
+        ("fix~00000001", "design.auth~a1b2c3d4"),
+        ("fix~00000001", "pattern.foo~a1b2c3d4"),
+        ("fix~00000001", "lesson.foo~a1b2c3d4"),
+        ("fix~00000001", "audit.foo~a1b2c3d4"),
+        ("fix~00000001", "milestone.foo~a1b2c3d4"),
+        ("fix~00000001", "code.foo~a1b2c3d4"),
+        ("fix~00000001", "task.foo~a1b2c3d4"),
+        # anchor-qualified refs (strict mode)
+        ("fix~00000001", "spec.auth~a1b2c3d4#FR1"),
+        ("fix~00000001", "spec.auth~a1b2c3d4#UT1"),
+        ("fix~00000001", "design.x~a1b2c3d4#DR7"),
+    ]
+    for local_id, ref in combinations:
+        marker = BindingMarker(
+            local_id=local_id,
+            ref=ref,
+            comment=None,
+            file="test.py",
+            offset=0,
+            span=None,
+        )
+        result = validate_marker(marker)
+        assert result.valid, (
+            f"FR13 violation: validate_marker rejected binding "
+            f"{local_id!r} → {ref!r} with errors: {result.errors}"
+        )
+
+
+def test_fr13_bind_with_comment_any_kind():
+    """FR13: comment field does not affect binding validity."""
+    from scry_parse.markers import BindingMarker
+
+    marker = BindingMarker(
+        local_id="thing~00000001",
+        ref="audit.security~deadbeef#AF7",
+        comment="addresses audit finding; see also lesson.csrf-bypass~cafebabe",
+        file="src/app.py",
+        offset=10,
+        span=None,
+    )
+    result = validate_marker(marker)
+    assert result.valid, f"FR13: comment-bearing binding rejected: {result.errors}"
+
+
+def test_fr13_bind_parsed_cross_kind():
+    """FR13: parsed cross-kind bindings from source text are accepted."""
+    content = """\
+# @scry.bind fix~00000001 spec.auth~a1b2c3d4#FR1
+# @scry.bind fix~00000001 design.system~b2c3d4e5
+# @scry.bind impl~00000002 lesson.perf~c3d4e5f6 rationale source
+def do_thing(): pass
+"""
+    result = parse_markers(content, language="python", file="src/thing.py")
+    bindings = [m for m in result.markers if isinstance(m, BindingMarker)]
+    assert len(bindings) == 3, f"Expected 3 bindings, got {len(bindings)}"
+    for b in bindings:
+        vr = validate_marker(b)
+        assert vr.valid, f"FR13: cross-kind binding invalid: {vr.errors}"
+
+
+# ---------------------------------------------------------------------------
+# FR14: Soft References — ID-shaped strings outside @scry.bind are NOT extracted
+# ---------------------------------------------------------------------------
+
+def test_fr14_id_in_prose_not_extracted():
+    """FR14: ID-shaped strings in prose text are not parsed as BindingMarkers."""
+    content = """\
+This file is related to design.auth-flow~a1b2c3d4 and also
+references pattern.caching~b2c3d4e5. See spec.x~cafebabe for more.
+No markers here — just narrative text mentioning IDs.
+"""
+    result = parse_markers(content, language="markdown", file="README.md")
+    bindings = [m for m in result.markers if isinstance(m, BindingMarker)]
+    assert bindings == [], (
+        f"FR14 violation: {len(bindings)} binding(s) extracted from prose: "
+        + str([(b.local_id, b.ref) for b in bindings])
+    )
+
+
+def test_fr14_id_in_yaml_body_not_extracted():
+    """FR14: ID-shaped strings inside @scry.entry YAML fields are not extracted as bindings."""
+    content = """\
+<!-- @scry.entry
+id: design.foo~a1b2c3d4
+kind: design
+status: active
+summary: "depends on spec.auth~b2c3d4e5; see also pattern.x~c3d4e5f6 for details"
+rationale: "without pattern.x~c3d4e5f6 this fails"
+applies: "modifying design.foo~a1b2c3d4"
+seeded_questions: []
+tags: []
+weight: 0.5
+@scry.entry.end -->
+"""
+    result = parse_markers(content, language=None, file="doc.md")
+    bindings = [m for m in result.markers if isinstance(m, BindingMarker)]
+    assert bindings == [], (
+        f"FR14 violation: ID-shaped strings in YAML body extracted as bindings: "
+        + str([(b.local_id, b.ref) for b in bindings])
+    )
+
+
+def test_fr14_id_in_code_comment_not_extracted():
+    """FR14: ID-shaped strings in non-scry code comments are not extracted."""
+    content = """\
+# This implementation relates to design.auth~a1b2c3d4 (soft reference, not formal)
+# See also: lesson.security~cafebabe for background
+def authenticate(user):
+    pass  # implements spec.auth~b2c3d4e5 roughly
+"""
+    result = parse_markers(content, language="python", file="auth.py")
+    bindings = [m for m in result.markers if isinstance(m, BindingMarker)]
+    assert bindings == [], (
+        f"FR14 violation: soft refs in code comments extracted as bindings: "
+        + str([(b.local_id, b.ref) for b in bindings])
+    )
+
+
+def test_fr14_id_in_bind_comment_not_extracted_as_extra_binding():
+    """FR14: ID-shaped strings in @scry.bind comment slots are soft refs — not extra bindings."""
+    content = """\
+# @scry.bind fix~00000001 audit.sec~a1b2c3d4 also fixes lesson.old-bug~b2c3d4e5
+def patch(): pass
+"""
+    result = parse_markers(content, language="python", file="patch.py")
+    bindings = [m for m in result.markers if isinstance(m, BindingMarker)]
+    # Only ONE binding — the formal one. The lesson.old-bug~b2c3d4e5 in the
+    # comment slot is a soft reference; it is NOT extracted as a separate BindingMarker.
+    assert len(bindings) == 1, (
+        f"FR14 violation: comment-slot soft ref extracted as extra binding "
+        f"(got {len(bindings)} bindings)"
+    )
+    assert bindings[0].ref == "audit.sec~a1b2c3d4"
+
+
+def test_fr14_soft_refs_in_multiple_contexts():
+    """FR14: soft refs across various non-formal positions are never extracted."""
+    content = """\
+---
+title: System Overview
+relates_to: design.system~a1b2c3d4
+---
+
+# Overview
+
+This document is informed by spec.auth~b2c3d4e5 and design.cache~c3d4e5f6.
+The implementation at code.server~d4e5f6a7 is the canonical reference.
+
+See milestone.v1~e5f6a7b8 for completion criteria.
+"""
+    result = parse_markers(content, language="markdown", file="overview.md")
+    bindings = [m for m in result.markers if isinstance(m, BindingMarker)]
+    assert bindings == [], (
+        f"FR14 violation: {len(bindings)} binding(s) from non-formal positions"
+    )
