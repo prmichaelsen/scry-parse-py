@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "scry-parse"
+version = "1.0.0"
+description = "Python parser for scry-spec v1.0 markers"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.11"
+dependencies = ["pyyaml>=6.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.urls]
+Repository = "https://github.com/prmichaelsen/scry-spec"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/scry_parse"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
