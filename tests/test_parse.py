@@ -873,6 +873,257 @@ def test_parse_result_anchor_file_field():
 
 
 # ---------------------------------------------------------------------------
+# Block-comment styles (v1.0.1 — FR1 universality)
+# ---------------------------------------------------------------------------
+
+def test_jsdoc_entry():
+    """JSDoc /** ... */ with ' * ' continuation prefix."""
+    content = """\
+/**
+ * @scry.entry
+ * id: design.foo~12345678
+ * kind: design
+ * summary: JSDoc block comment entry
+ * status: active
+ * weight: 0.5
+ * tags: []
+ * rationale: >
+ *   Test rationale
+ * applies: testing
+ * seeded_questions: []
+ * @scry.entry.end
+ */
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    e = result.entries[0]
+    assert e.id == "design.foo~12345678"
+    assert e.kind == "design"
+    assert "JSDoc" in e.summary
+    assert e.status == "active"
+
+
+def test_c_block_entry():
+    """C-style /* ... */ with indented body (no per-line prefix)."""
+    content = """\
+/*
+   @scry.entry
+   id: design.foo~12345678
+   kind: design
+   summary: C-block comment entry
+   status: active
+   weight: 0.5
+   tags: []
+   rationale: >
+     Test rationale
+   applies: testing
+   seeded_questions: []
+   @scry.entry.end
+*/
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    e = result.entries[0]
+    assert e.id == "design.foo~12345678"
+    assert "C-block" in e.summary
+
+
+def test_c_block_inline_sentinels():
+    """C-style /* @scry.entry ... @scry.entry.end */ on same-line sentinels."""
+    content = """\
+/* @scry.entry
+   id: design.bar~87654321
+   kind: design
+   summary: Inline C-block sentinels
+   status: draft
+   weight: 0.4
+   tags: []
+   rationale: >
+     Test
+   applies: testing
+   seeded_questions: []
+   @scry.entry.end */
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    assert result.entries[0].id == "design.bar~87654321"
+
+
+def test_jsdoc_anchor():
+    """JSDoc-style @scry.anchor block."""
+    content = """\
+/**
+ * @scry.anchor auth-point~f1e2d3c4
+ * description: JSDoc anchor for auth entry point
+ * seeded_questions:
+ *   - How is JSDoc auth done?
+ * @scry.anchor.end
+ */
+"""
+    result = parse_markers(content)
+    assert len(result.anchors) == 1
+    a = result.anchors[0]
+    assert a.name == "auth-point~f1e2d3c4"
+    assert "JSDoc anchor" in a.description
+    assert any("JSDoc" in q for q in a.seeded_questions)
+
+
+def test_ocaml_block_entry():
+    """OCaml (* ... *) with indented body."""
+    content = """\
+(*
+   @scry.entry
+   id: design.foo~12345678
+   kind: design
+   summary: OCaml block comment entry
+   status: active
+   weight: 0.5
+   tags: []
+   rationale: >
+     Test rationale
+   applies: testing
+   seeded_questions: []
+   @scry.entry.end
+*)
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    assert result.entries[0].id == "design.foo~12345678"
+    assert "OCaml" in result.entries[0].summary
+
+
+def test_haskell_block_entry():
+    """Haskell {- ... -} with indented body."""
+    content = """\
+{-
+   @scry.entry
+   id: design.foo~12345678
+   kind: design
+   summary: Haskell block comment entry
+   status: active
+   weight: 0.5
+   tags: []
+   rationale: >
+     Test rationale
+   applies: testing
+   seeded_questions: []
+   @scry.entry.end
+-}
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    assert result.entries[0].id == "design.foo~12345678"
+    assert "Haskell" in result.entries[0].summary
+
+
+def test_powershell_block_entry():
+    """PowerShell <# ... #> with indented body."""
+    content = """\
+<#
+   @scry.entry
+   id: design.foo~12345678
+   kind: design
+   summary: PowerShell block comment entry
+   status: active
+   weight: 0.5
+   tags: []
+   rationale: >
+     Test rationale
+   applies: testing
+   seeded_questions: []
+   @scry.entry.end
+#>
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    assert result.entries[0].id == "design.foo~12345678"
+    assert "PowerShell" in result.entries[0].summary
+
+
+def test_jsdoc_bind_marker():
+    """JSDoc-style @scry.bind single-line inside a regular comment."""
+    content = """\
+/**
+ * @scry.bind my-impl~a1b2c3d4 design.foo~12345678
+ */
+"""
+    result = parse_markers(content)
+    assert len(result.bindings) == 1
+    b = result.bindings[0]
+    assert b.local_id == "my-impl~a1b2c3d4"
+    assert b.ref == "design.foo~12345678"
+
+
+def test_block_comment_existing_line_styles_still_pass():
+    """Regression: existing line-comment styles unaffected by inference change."""
+    python = """\
+# @scry.entry
+# id: design.py~a1b2c3d4
+# kind: design
+# summary: Python line-comment style
+# status: active
+# weight: 0.5
+# tags: []
+# rationale: >
+#   Test
+# applies: testing
+# seeded_questions: []
+# @scry.entry.end
+"""
+    ts = """\
+// @scry.entry
+// id: design.ts~b2c3d4e5
+// kind: design
+// summary: TypeScript line-comment style
+// status: active
+// weight: 0.5
+// tags: []
+// rationale: >
+//   Test
+// applies: testing
+// seeded_questions: []
+// @scry.entry.end
+"""
+    sql = """\
+-- @scry.entry
+-- id: design.sql~c3d4e5f6
+-- kind: design
+-- summary: SQL line-comment style
+-- status: active
+-- weight: 0.5
+-- tags: []
+-- rationale: >
+--   Test
+-- applies: testing
+-- seeded_questions: []
+-- @scry.entry.end
+"""
+    lisp = """\
+;; @scry.entry
+;; id: design.lisp~d4e5f6a7
+;; kind: design
+;; summary: Lisp double-semi style
+;; status: active
+;; weight: 0.5
+;; tags: []
+;; rationale: >
+;;   Test
+;; applies: testing
+;; seeded_questions: []
+;; @scry.entry.end
+"""
+    for content, expected_id in [
+        (python, "design.py~a1b2c3d4"),
+        (ts, "design.ts~b2c3d4e5"),
+        (sql, "design.sql~c3d4e5f6"),
+        (lisp, "design.lisp~d4e5f6a7"),
+    ]:
+        result = parse_markers(content)
+        assert len(result.entries) == 1, f"Expected 1 entry for {expected_id}"
+        assert result.entries[0].id == expected_id
+
+
+# ---------------------------------------------------------------------------
 # Block-comment styles (v1.0.1 fix — FR1 universality)
 # ---------------------------------------------------------------------------
 
@@ -1056,3 +1307,105 @@ def test_block_comment_existing_line_styles_still_work():
         result = parse_markers(content)
         assert len(result.entries) == 1, f"Failed for:\n{content}"
         assert result.entries[0].id == "design.foo~12345678"
+
+
+# ---------------------------------------------------------------------------
+# FR12: cycle detection (check_cycles)
+# ---------------------------------------------------------------------------
+
+from scry_parse import check_cycles
+
+
+def _make_entry(id_: str, depends_on: list[str] | None = None) -> EntryMarker:
+    """Construct a minimal EntryMarker for cycle-detection tests."""
+    from scry_parse.markers import EntryMarker
+    return EntryMarker(
+        id=id_,
+        kind="design",
+        summary="test",
+        status="active",
+        weight=0.5,
+        tags=[],
+        rationale="",
+        applies="",
+        seeded_questions=[],
+        depends_on=depends_on or [],
+        file="",
+        line=0,
+    )
+
+
+def test_check_cycles_empty():
+    """Empty marker list returns no cycles."""
+    assert check_cycles([]) == []
+
+
+def test_check_cycles_no_deps():
+    """Markers without depends_on have no cycles."""
+    markers = [
+        _make_entry("design.a~00000001"),
+        _make_entry("design.b~00000002"),
+    ]
+    assert check_cycles(markers) == []
+
+
+def test_check_cycles_linear_chain():
+    """A → B → C with no back-edge is acyclic."""
+    markers = [
+        _make_entry("design.a~00000001", ["design.b~00000002"]),
+        _make_entry("design.b~00000002", ["design.c~00000003"]),
+        _make_entry("design.c~00000003"),
+    ]
+    assert check_cycles(markers) == []
+
+
+def test_check_cycles_self_loop():
+    """A depends_on A is a cycle."""
+    markers = [_make_entry("design.a~00000001", ["design.a~00000001"])]
+    errors = check_cycles(markers)
+    assert len(errors) == 1
+    assert "cycle detected" in errors[0]
+    assert "design.a~00000001" in errors[0]
+
+
+def test_check_cycles_two_node_cycle():
+    """A → B → A is a cycle."""
+    markers = [
+        _make_entry("design.a~00000001", ["design.b~00000002"]),
+        _make_entry("design.b~00000002", ["design.a~00000001"]),
+    ]
+    errors = check_cycles(markers)
+    assert len(errors) >= 1
+    assert any("cycle detected" in e for e in errors)
+
+
+def test_check_cycles_three_node_cycle():
+    """A → B → C → A is a cycle."""
+    markers = [
+        _make_entry("design.a~00000001", ["design.b~00000002"]),
+        _make_entry("design.b~00000002", ["design.c~00000003"]),
+        _make_entry("design.c~00000003", ["design.a~00000001"]),
+    ]
+    errors = check_cycles(markers)
+    assert len(errors) >= 1
+    assert any("cycle detected" in e for e in errors)
+    # The cycle path should contain all three nodes
+    full_error = " ".join(errors)
+    assert "design.a~00000001" in full_error
+    assert "design.b~00000002" in full_error
+    assert "design.c~00000003" in full_error
+
+
+def test_check_cycles_unresolved_dep_not_a_cycle():
+    """A depends on B but B is not in markers — not a cycle, just unresolved."""
+    markers = [_make_entry("design.a~00000001", ["design.b~00000002"])]
+    assert check_cycles(markers) == []
+
+
+def test_check_cycles_ignores_non_entry_markers():
+    """AnchorMarker and BindingMarker objects are silently skipped."""
+    from scry_parse.markers import AnchorMarker, BindingMarker
+    anchor = AnchorMarker(name="a~00000001", description="d", seeded_questions=[], file="", line=0)
+    binding = BindingMarker(local_id="a~00000001", ref="design.b~00000002", comment=None, file="", line=0)
+    # No crash, no false cycles
+    assert check_cycles([anchor, binding]) == []
