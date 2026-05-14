@@ -97,6 +97,52 @@ def _validate_anchor(marker: AnchorMarker) -> ValidationResult:
     return ValidationResult(valid=valid, errors=errors, warnings=warnings)
 
 
+def check_cycles(markers: list[EntryMarker]) -> list[str]:
+    """Detect cycles in the depends_on graph across a collection of EntryMarkers.
+
+    Per scry-spec v1.0 FR12, implementations MUST prevent cycles in the
+    depends_on relationship (A → B → C → A is forbidden).
+
+    Only EntryMarker objects are considered; non-entry markers are ignored.
+    Depends_on references to IDs not present in the provided markers are
+    skipped (unresolved references are not a cycle error).
+
+    Returns a list of human-readable error strings, one per cycle found.
+    Returns an empty list when the graph is acyclic.
+    """
+    # Build adjacency map from id → list[dep_id]
+    graph: dict[str, list[str]] = {}
+    for m in markers:
+        if isinstance(m, EntryMarker):
+            graph[m.id] = list(m.depends_on) if m.depends_on else []
+
+    # DFS with three-colour marking: 0=unvisited, 1=in-stack, 2=done
+    color: dict[str, int] = {node: 0 for node in graph}
+    cycles: list[str] = []
+
+    def _dfs(node: str, stack: list[str]) -> None:
+        color[node] = 1
+        stack.append(node)
+        for dep in graph.get(node, []):
+            if dep not in color:
+                continue  # unresolved reference — not a cycle
+            if color[dep] == 1:
+                # Back-edge found: reconstruct cycle path
+                idx = stack.index(dep)
+                cycle_path = stack[idx:] + [dep]
+                cycles.append("cycle detected: " + " → ".join(cycle_path))
+            elif color[dep] == 0:
+                _dfs(dep, stack)
+        stack.pop()
+        color[node] = 2
+
+    for node in list(graph.keys()):
+        if color[node] == 0:
+            _dfs(node, [])
+
+    return cycles
+
+
 def _validate_binding(marker: BindingMarker) -> ValidationResult:
     errors: list[str] = []
     warnings: list[str] = []

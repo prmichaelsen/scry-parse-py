@@ -1318,7 +1318,6 @@ from scry_parse import check_cycles
 
 def _make_entry(id_: str, depends_on: list[str] | None = None) -> EntryMarker:
     """Construct a minimal EntryMarker for cycle-detection tests."""
-    from scry_parse.markers import EntryMarker
     return EntryMarker(
         id=id_,
         kind="design",
@@ -1326,12 +1325,14 @@ def _make_entry(id_: str, depends_on: list[str] | None = None) -> EntryMarker:
         status="active",
         weight=0.5,
         tags=[],
-        rationale="",
-        applies="",
+        rationale=None,
+        applies=None,
         seeded_questions=[],
         depends_on=depends_on or [],
+        implements=None,
+        supersedes=None,
         file="",
-        line=0,
+        span=(0, 0),
     )
 
 
@@ -1405,7 +1406,7 @@ def test_check_cycles_unresolved_dep_not_a_cycle():
 def test_check_cycles_ignores_non_entry_markers():
     """AnchorMarker and BindingMarker objects are silently skipped."""
     from scry_parse.markers import AnchorMarker, BindingMarker
-    anchor = AnchorMarker(name="a~00000001", description="d", seeded_questions=[], file="", line=0)
-    binding = BindingMarker(local_id="a~00000001", ref="design.b~00000002", comment=None, file="", line=0)
+    anchor = AnchorMarker(name="a~00000001", description="d", seeded_questions=[], file="", span=(0, 0))
+    binding = BindingMarker(local_id="a~00000001", ref="design.b~00000002", comment=None, file="", offset=0, span=None)
     # No crash, no false cycles
     assert check_cycles([anchor, binding]) == []

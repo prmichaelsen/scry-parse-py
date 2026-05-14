@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-05-14
+
+### Added
+
+- `check_cycles(markers)` — new public API function implementing scry-spec FR12.
+  Detects cycles in the `depends_on` directed graph across a collection of
+  `EntryMarker` objects. Returns a list of human-readable error strings, one per
+  cycle detected (e.g. `"cycle detected: design.a~... → design.b~... → design.a~..."`).
+  Unresolved references (IDs not present in the provided markers) are silently
+  skipped; non-entry markers (AnchorMarker, BindingMarker) are ignored.
+- Fixed `__version__` drift: `__init__.py` now matches `pyproject.toml` (was 1.0.0, now
+  auto-kept in sync with the published version).
+
 ## [1.0.1] - 2026-05-14
 
 ### Fixed
