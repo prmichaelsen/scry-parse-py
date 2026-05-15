@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-05-15
+
+### Fixed
+
+- **Python single-line string literal exclusion** — a line where every `@scry.`
+  token is inside a Python string literal (`"..."`, `'...'`, f-strings, b-strings)
+  is now inert. Fixes phantom anchors from `mint.py`-style code:
+  `"marker_open": f"<!-- @scry.anchor {ident}"` was producing phantom anchors
+  named `{ident}","` in the production DB.
+- Fix `__version__` in `__init__.py` (was left at `1.0.3` after v1.0.4 release).
+- 2 additional regression tests: `test_python_string_literal_marker_ignored`,
+  `test_python_real_comment_not_excluded_by_string_detection`.
+
+---
+
 ## [1.0.4] - 2026-05-15
 
 ### Fixed
@@ -23,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fixtures, or language string literals. This produced phantom rows in the
   `scry__anchor` and `scry__doc` tables from test files and spec documentation.
 - 12 regression tests added covering fenced blocks, inline code spans, Python
-  string literals, and mixed real+phantom scenarios.
+  triple-quoted string literals, and mixed real+phantom scenarios.
 
 ---
 

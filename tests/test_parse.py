@@ -1849,3 +1849,86 @@ def test_ts_test_fixture_style_phantom_anchor_ignored():
     assert result.anchors == [], (
         f"Phantom anchor from TS inline code: {result.anchors}"
     )
+
+
+def test_python_string_literal_marker_ignored():
+    """Regression: @scry. tokens inside Python single-line string literals must not be indexed.
+
+    Evidence: scry/src/scry/service/mint.py contains dict literals like
+        "marker_open": f"<!-- @scry.anchor {ident}",
+        "marker_close": "@scry.anchor.end -->",
+    which were producing phantom anchors named '{ident}","' in the production DB.
+
+    The three required tests (per the v1.0.4 directive) are:
+      - test_markdown_code_fence_marker_ignored  → test_markdown_code_fence_anchor_ignored
+      - test_markdown_inline_code_marker_ignored → test_markdown_inline_code_entry_ignored
+      - test_python_string_literal_marker_ignored (this test — single-line string case)
+    """
+    # Mirrors the actual content from scry/src/scry/service/mint.py that was
+    # producing phantom anchors in the production scry DB.
+    content = '''\
+def _marker_schema(kind: str, ident: str) -> dict:
+    if kind == "anchor":
+        return {
+            "marker_open": f"<!-- @scry.anchor {ident}",
+            "marker_close": "@scry.anchor.end -->",
+            "fields": {
+                "description": "what this location represents (required)",
+                "seeded_questions": "YAML list (required, empty allowed)",
+            },
+        }
+    if kind == "bind":
+        return {
+            "marker_line": f"# @scry.bind {ident} <ref> [comment]",
+            "marker_block_open": f"# @scry.bind {ident} <ref>",
+            "marker_block_close": "# @scry.bind.end",
+        }
+    return {}
+'''
+    result = parse_markers(content, file="mint.py")
+    assert result.anchors == [], (
+        f"Phantom anchor from Python string literal: "
+        + str([(a.name, a.file) for a in result.anchors])
+    )
+    assert result.bindings == [], (
+        f"Phantom binding from Python string literal: "
+        + str([(b.local_id, b.ref) for b in result.bindings])
+    )
+    assert result.entries == []
+
+
+def test_python_real_comment_not_excluded_by_string_detection():
+    """Regression guard: real @scry markers in Python comments are not affected by
+    the Python string-literal exclusion logic."""
+    content = '''\
+# @scry.entry
+# id: design.real~a1b2c3d4
+# kind: design
+# summary: Real Python comment entry — must be indexed
+# status: active
+# weight: 0.7
+# tags: []
+# rationale: >
+#   This is a real marker in a comment
+# applies: testing
+# seeded_questions: []
+# @scry.entry.end
+
+# @scry.bind impl~b2c3d4e5 spec.foo~c3d4e5f6
+
+HELP = "example: @scry.entry ... @scry.entry.end"
+OTHER = "@scry.anchor foo~12345678 — anchor syntax"
+'''
+    result = parse_markers(content, file="real_module.py")
+    # Real entry in comment should be found
+    assert len(result.entries) == 1, (
+        f"Real comment entry not found; entries: {result.entries}"
+    )
+    assert result.entries[0].id == "design.real~a1b2c3d4"
+    # Real binding in comment should be found
+    assert len(result.bindings) == 1, (
+        f"Real comment binding not found; bindings: {result.bindings}"
+    )
+    assert result.bindings[0].local_id == "impl~b2c3d4e5"
+    # String-literal lines must produce no anchors
+    assert result.anchors == []

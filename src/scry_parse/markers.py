@@ -222,6 +222,46 @@ def _scry_only_in_inline_code(line: str) -> bool:
     return '@scry.' not in _strip_inline_code(line)
 
 
+def _strip_py_single_line_strings(line: str) -> str:
+    """Remove content inside single-line Python string/f-string literals.
+
+    Handles basic single-quoted and double-quoted strings with backslash escapes.
+    Does not handle triple-quoted strings (those are handled by the multi-line
+    pass in _compute_inert_lines).  The string prefix characters (f, b, r, etc.)
+    are left in place; only the quoted content is removed.
+    """
+    result: list[str] = []
+    i = 0
+    n = len(line)
+    while i < n:
+        ch = line[i]
+        if ch in ('"', "'"):
+            # Do NOT consume the opening quote char (so it's absent from result);
+            # skip past the closing quote.
+            quote = ch
+            i += 1
+            while i < n:
+                if line[i] == '\\':
+                    i += 2  # skip escape sequence
+                elif line[i] == quote:
+                    i += 1  # skip closing quote
+                    break
+                else:
+                    i += 1
+            # String content is not appended
+        else:
+            result.append(ch)
+            i += 1
+    return ''.join(result)
+
+
+def _scry_only_in_py_strings(line: str) -> bool:
+    """Return True if every @scry. on the line is inside a Python string literal."""
+    if '@scry.' not in line:
+        return False
+    return '@scry.' not in _strip_py_single_line_strings(line)
+
+
 def _compute_inert_lines(
     lines: list[str],
     language: str | None = None,
@@ -297,10 +337,19 @@ def _compute_inert_lines(
         if not found_block:
             i += 1
 
-    # --- Pass 2: single-line inline code spans ---
+    # --- Pass 2: single-line exclusions ---
+    # • For Python files: check whether @scry. appears only inside string literals.
+    # • For all other files: check whether @scry. appears only inside inline backtick
+    #   spans (common in markdown documentation and TypeScript test fixtures).
     for j, line in enumerate(lines):
-        if j not in inert and '@scry.' in line and _scry_only_in_inline_code(line):
-            inert.add(j)
+        if j in inert or '@scry.' not in line:
+            continue
+        if is_python:
+            if _scry_only_in_py_strings(line):
+                inert.add(j)
+        else:
+            if _scry_only_in_inline_code(line):
+                inert.add(j)
 
     return inert
 
