@@ -1986,6 +1986,22 @@ supersedes: design.old~h1h1h1h1
     )
 
 
+def test_depends_on_scalar_form_rejected():
+    """depends_on: task.X~h1 (scalar) is a parse error — entry rejected (FR11.4)."""
+    content = """\
+<!-- @scry.entry
+id: design.foo~abcd1234
+kind: design
+summary: Test
+depends_on: task.build~h1h1h1h1
+@scry.entry.end -->
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 0, (
+        f"Expected entry rejected for scalar depends_on; got: {result.entries}"
+    )
+
+
 def test_depends_on_array_form_ok():
     """depends_on array form still works (no regression)."""
     content = """\

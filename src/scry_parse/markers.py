@@ -748,10 +748,10 @@ def _parse_entry_block(
     rationale = _coerce_str(data.get("rationale"))
     applies = _coerce_str(data.get("applies"))
     seeded_questions = _coerce_list(data.get("seeded_questions"))
-    depends_on = _coerce_list(data.get("depends_on"))
+    depends_on, dep_ok = _strict_array(data.get("depends_on"))
     implements, impl_ok = _strict_array(data.get("implements"))
     supersedes, sup_ok = _strict_array(data.get("supersedes"))
-    if not impl_ok or not sup_ok:
+    if not dep_ok or not impl_ok or not sup_ok:
         # Scalar relationship field is a hard parse error (FR11.4) — skip entry
         return
 

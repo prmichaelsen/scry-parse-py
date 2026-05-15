@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] - 2026-05-15
+
+### Fixed
+
+- **FR11.4 enforcement — `depends_on` scalar form now rejected** — `depends_on`
+  was using `_coerce_list` (silently coercing scalar strings to single-element
+  lists) while `implements` and `supersedes` correctly used `_strict_array`.
+  Scalar `depends_on` now causes the entry to be rejected, consistent with FR11.4
+  and the behavior of the other two relationship fields. Matches scry-parse-ts
+  v1.0.7 which fixed the same discrepancy.
+- Added `test_depends_on_scalar_form_rejected` (1 new test, 104 total).
+
+---
+
 ## [1.0.6] - 2026-05-15
 
 ### Changed

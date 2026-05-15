@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scry-parse"
-version = "1.0.6"
+version = "1.0.7"
 description = "Python parser for scry-spec v1.0 markers"
 readme = "README.md"
 license = {file = "LICENSE"}
