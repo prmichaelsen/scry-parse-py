@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8] - 2026-05-15
+
+### Fixed
+
+- **FR11.6 v1.0.4 — strip host-comment closers from single-line bind comment** — Single-line
+  `@scry.bind` markers hosted inside HTML (`<!-- ... -->`) or C-style block (`/* ... */`)
+  comments were leaking closing delimiters (` -->`, ` */`) into the `comment` field.
+  Added `_strip_comment_closers` helper; applied after assembling trailing-content tokens.
+  Matches scry-spec v1.0.4. Added Tests 23–24 (106 total).
+
+---
+
 ## [1.0.7] - 2026-05-15
 
 ### Fixed

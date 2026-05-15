@@ -143,6 +143,22 @@ def _clean_body(lines: list[str]) -> str:
     return "".join(out)
 
 
+_COMMENT_CLOSERS = ("-->", "*/")
+
+
+def _strip_comment_closers(s: str) -> str:
+    """Strip host-language comment closing delimiters from a single-line bind comment.
+
+    Per FR11.6 v1.0.4: comment fields MUST carry authored content only.
+    Strips trailing `-->` (HTML block comments) and `*/` (C-style block comments),
+    plus any whitespace left after stripping.
+    """
+    for closer in _COMMENT_CLOSERS:
+        if s.endswith(closer):
+            return s[: -len(closer)].rstrip()
+    return s
+
+
 def _detect_bind_prefix(sentinel_line: str) -> str:
     """Extract the comment prefix from a @scry.bind sentinel line.
 
@@ -368,6 +384,10 @@ _BLOCK_CLOSE_RE = re.compile(r'@scry\.(entry|anchor)\.end\b')
 _BIND_OPEN_RE = re.compile(r'@scry\.bind(?!\.end)\b(.*)')
 _BIND_CLOSE_RE = re.compile(r'@scry\.bind\.end\b')
 
+# FR11.6 step 5 (scry-spec v1.0.4): strip host-language comment closing delimiters
+# from single-line bind comment fields (e.g. ` -->` in HTML, ` */` in C-style block).
+_BIND_COMMENT_CLOSER_RE = re.compile(r'\s*(?:-->|\*/)$')
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -581,7 +601,10 @@ def _parse_bind_content(
     # Comment: anything after the second token on the open line,
     # or the body text for block form
     if len(tokens) >= 3:
-        comment: str | None = " ".join(tokens[2:]).lstrip("# ").strip()
+        raw_comment = " ".join(tokens[2:]).lstrip("# ").strip()
+        # FR11.6 v1.0.4: strip host-language comment closing delimiters from
+        # single-line trailing-content (e.g. --> in HTML, */ in C-style blocks).
+        comment: str | None = _strip_comment_closers(raw_comment)
     elif body_text:
         comment = body_text
     else:

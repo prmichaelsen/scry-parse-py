@@ -2033,3 +2033,48 @@ implements: [spec.auth~h1h1h1h1]
     assert len(result.entries) == 1
     e = result.entries[0]
     assert e.implements == ["spec.auth~h1h1h1h1"]
+
+
+# ---------------------------------------------------------------------------
+# Test 23-24: FR11.6 v1.0.4 — host-comment closer stripping from single-line bind
+# ---------------------------------------------------------------------------
+
+def test_fr11_6_html_comment_closer_stripped_from_bind_comment():
+    """Test 23: HTML comment closing delimiter stripped from single-line binding comment.
+
+    <!-- @scry.bind id ref comment text --> must yield comment without the trailing -->.
+    """
+    from scry_parse.markers import BindingMarker
+
+    content = (
+        "<!-- @scry.bind autopoiesis-observed~86289424 internal.autopoietic-reflect~79313e48"
+        " the autopoietic property, defined there, observed here in operation -->\n"
+    )
+    result = parse_markers(content)
+    bindings = [m for m in result.markers if isinstance(m, BindingMarker)]
+    assert len(bindings) == 1, f"Expected 1 binding, got {len(bindings)}"
+    b = bindings[0]
+    assert b.local_id == "autopoiesis-observed~86289424"
+    assert b.ref == "internal.autopoietic-reflect~79313e48"
+    assert b.comment == "the autopoietic property, defined there, observed here in operation", (
+        f"Expected comment without trailing -->, got: {b.comment!r}"
+    )
+
+
+def test_fr11_6_c_style_block_comment_closer_stripped_from_bind_comment():
+    """Test 24: C-style block comment closing delimiter stripped from single-line binding comment.
+
+    /* @scry.bind id ref comment text */ must yield comment without the trailing */.
+    """
+    from scry_parse.markers import BindingMarker
+
+    content = "/* @scry.bind impl~aabbccdd spec.auth~abcd1234#FR3 partial impl, OAuth pending */\n"
+    result = parse_markers(content, language="c")
+    bindings = [m for m in result.markers if isinstance(m, BindingMarker)]
+    assert len(bindings) == 1, f"Expected 1 binding, got {len(bindings)}"
+    b = bindings[0]
+    assert b.local_id == "impl~aabbccdd"
+    assert b.ref == "spec.auth~abcd1234#FR3"
+    assert b.comment == "partial impl, OAuth pending", (
+        f"Expected comment without trailing */, got: {b.comment!r}"
+    )
