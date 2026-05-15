@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write  # required for OIDC trusted publishing
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -36,4 +37,4 @@ jobs:
         run: uv build
 
       - name: Publish to PyPI
-        run: uv publish --token ${{ secrets.PYPI_API_TOKEN }} --check-url https://pypi.org/simple/scry-parse/
+        run: uv publish --trusted-publishing always --check-url https://pypi.org/simple/scry-parse/
