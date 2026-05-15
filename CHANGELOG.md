@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-05-15
+
+### Changed
+
+- **FR11.4 enforcement — `implements` and `supersedes` must be arrays** — scalar
+  string values for these fields now raise a `ValidationError` (error code
+  `not_array`). The spec requires array form (`["id1", "id2"]`); singletons must
+  use `["id"]`. `depends_on` was already enforced as array-only; this aligns
+  `implements` and `supersedes` with the same rule.
+- 4 new tests: `test_implements_array_form_ok`, `test_implements_scalar_form_rejected`,
+  `test_supersedes_scalar_form_rejected`, `test_singleton_array_form`.
+
+---
+
 ## [1.0.5] - 2026-05-15
 
 ### Fixed
