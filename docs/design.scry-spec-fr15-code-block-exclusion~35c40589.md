@@ -1,33 +1,45 @@
 <!-- @scry.entry
 id: design.scry-spec-fr15-code-block-exclusion~35c40589
 kind: design
-status: draft
+status: active
 weight: 0.7
-tags: ["scope:scry-parse", "scope:scry-spec", "topic:phantom-markers", "topic:spec-proposal", "track:scry-parse-py"]
+tags: ["scope:scry-parse", "scope:scry-spec", "topic:phantom-markers", "topic:spec-proposal", "track:scry-parse-py", "topic:fr11.7", "fr11.7", "phantom-markers"]
 summary: >
-  Spec proposal for FR15: code-context exclusion rule. Markers in fenced code
-  blocks, inline code spans, and language string literals must be excluded from
-  indexing. Drafted for scry-spec as a GitHub issue/PR. Addresses phantom rows
-  observed in production DB from test fixtures and documentation examples.
+  Spec proposal for code-context exclusion rule (originally labeled FR15, landed as FR11.7).
+  Markers in fenced code blocks, inline code spans, and language string literals must be
+  excluded from indexing. Filed as scry-spec PR #2 (https://github.com/prmichaelsen/scry-spec/pull/2),
+  pending originator merge. Implemented in scry-parse v1.0.4+ and scry-parse-ts v1.0.5+.
+  Addresses phantom rows from test fixtures and documentation examples. Also: code-construct
+  exclusion, inert-context, phantom anchors, fenced code blocks, inline code, FR11.7.
 rationale: >
-  scry-parse v1.0.4 ships this behavior but the spec does not mandate it, so
-  scry-parse-ts and future implementations must independently infer it. Without
-  a spec FR, implementations diverge. Phantom markers from test fixtures and
-  spec docs pollute the knowledge graph silently.
-applies: "reviewing scry-spec PRs, implementing scry-parse-ts exclusion logic, spec conformance audits"
+  Without this spec FR, parsers diverge on code-context exclusion. Now filed as PR #2;
+  reference implementations live in both Python and TypeScript parsers.
+applies: "reviewing scry-spec PRs, implementing scry-parse-ts exclusion logic, spec conformance audits, checking FR11.7 status"
 seeded_questions:
   - "Does scry-spec address fenced code block exclusion?"
   - "Should markers in code examples be indexed?"
   - "How does scry-parse-py suppress phantom markers?"
   - "What FR covers code block exclusion in scry-spec?"
   - "Why do phantom anchors appear in production DB?"
+  - "Was FR15 filed as a PR?"
+  - "What happened to the FR15 proposal?"
+  - "Is scry-spec PR #2 merged?"
 @scry.entry.end -->
 
-# Spec proposal: FR15 — Code-Context Exclusion Rule
+# Spec proposal: FR15 → FR11.7 — Code-Context Exclusion Rule
 
 **Target:** [scry-spec](https://github.com/prmichaelsen/scry-spec) `v1.0.md`  
-**Status:** Draft — file as GitHub issue or PR on scry-spec  
-**Motivation:** scry-parse v1.0.4 shipped this behavior; spec does not currently mandate it.
+**Status:** Filed as [PR #2](https://github.com/prmichaelsen/scry-spec/pull/2) — pending originator merge  
+**Spec number:** Originally proposed as FR15; landed as **FR11.7** in the spec  
+**Motivation:** scry-parse v1.0.4 shipped this behavior; spec did not mandate it. PR #2 adds FR11.7 to v1.0.1.
+
+---
+
+> **Update 2026-05-15:** PR #2 filed at commit `65e3852`. The requirement was added after §11.6 as §11.7
+> (not as a standalone FR15), keeping the inert-context rules co-located. scry-parse-py v1.0.6 and
+> scry-parse-ts v1.0.5+ both implement the behavior. Originator merge pending.
+
+---
 
 ---
 
