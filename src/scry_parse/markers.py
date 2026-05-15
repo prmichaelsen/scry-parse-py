@@ -37,8 +37,8 @@ class EntryMarker:
     applies: str | None
     seeded_questions: list[str]
     depends_on: list[str]
-    implements: str | None
-    supersedes: str | None
+    implements: list[str]
+    supersedes: list[str]
     file: str
     span: tuple[int, int]  # (start_line, end_line) 1-indexed
 
@@ -405,6 +405,16 @@ def _coerce_list(value: Any) -> list[str]:
     return [str(value)]
 
 
+def _strict_array(value: Any) -> tuple[list[str], bool]:
+    """Return (list, ok). ok=False if a scalar string was provided (parse error per FR11.4)."""
+    if value is None:
+        return [], True
+    if isinstance(value, list):
+        return [str(v) for v in value], True
+    # Scalar string or any other non-list type → hard parse error
+    return [], False
+
+
 def _coerce_str(value: Any) -> str | None:
     if value is None:
         return None
@@ -739,8 +749,11 @@ def _parse_entry_block(
     applies = _coerce_str(data.get("applies"))
     seeded_questions = _coerce_list(data.get("seeded_questions"))
     depends_on = _coerce_list(data.get("depends_on"))
-    implements = _coerce_str(data.get("implements"))
-    supersedes = _coerce_str(data.get("supersedes"))
+    implements, impl_ok = _strict_array(data.get("implements"))
+    supersedes, sup_ok = _strict_array(data.get("supersedes"))
+    if not impl_ok or not sup_ok:
+        # Scalar relationship field is a hard parse error (FR11.4) — skip entry
+        return
 
     result.entries.append(EntryMarker(
         id=marker_id,

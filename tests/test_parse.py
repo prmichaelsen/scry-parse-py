@@ -533,8 +533,8 @@ def test_validate_entry_valid():
         applies="auth work",
         seeded_questions=["How does refresh work?"],
         depends_on=[],
-        implements=None,
-        supersedes=None,
+        implements=[],
+        supersedes=[],
         file="test.md",
         span=(1, 10),
     )
@@ -555,8 +555,8 @@ def test_validate_entry_bad_id():
         applies=None,
         seeded_questions=[],
         depends_on=[],
-        implements=None,
-        supersedes=None,
+        implements=[],
+        supersedes=[],
         file="test.md",
         span=(1, 5),
     )
@@ -577,8 +577,8 @@ def test_validate_entry_empty_summary():
         applies=None,
         seeded_questions=[],
         depends_on=[],
-        implements=None,
-        supersedes=None,
+        implements=[],
+        supersedes=[],
         file="test.md",
         span=(1, 5),
     )
@@ -599,8 +599,8 @@ def test_validate_entry_non_baseline_kind_warns():
         applies=None,
         seeded_questions=[],
         depends_on=[],
-        implements=None,
-        supersedes=None,
+        implements=[],
+        supersedes=[],
         file="test.md",
         span=(1, 5),
     )
@@ -622,8 +622,8 @@ def test_validate_entry_non_baseline_status_warns():
         applies=None,
         seeded_questions=[],
         depends_on=[],
-        implements=None,
-        supersedes=None,
+        implements=[],
+        supersedes=[],
         file="test.md",
         span=(1, 5),
     )
@@ -1329,8 +1329,8 @@ def _make_entry(id_: str, depends_on: list[str] | None = None) -> EntryMarker:
         applies=None,
         seeded_questions=[],
         depends_on=depends_on or [],
-        implements=None,
-        supersedes=None,
+        implements=[],
+        supersedes=[],
         file="",
         span=(0, 0),
     )
@@ -1932,3 +1932,88 @@ OTHER = "@scry.anchor foo~12345678 — anchor syntax"
     assert result.bindings[0].local_id == "impl~b2c3d4e5"
     # String-literal lines must produce no anchors
     assert result.anchors == []
+
+
+# ---------------------------------------------------------------------------
+# FR4 / FR11.4 — relationship fields must be array form
+# ---------------------------------------------------------------------------
+
+def test_implements_array_form_ok():
+    """implements: [spec.X~h1, spec.Y~h2] parses as list."""
+    content = """\
+<!-- @scry.entry
+id: design.foo~abcd1234
+kind: design
+summary: Test
+implements: [spec.auth~h1h1h1h1, spec.other~h2h2h2h2]
+@scry.entry.end -->
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    e = result.entries[0]
+    assert e.implements == ["spec.auth~h1h1h1h1", "spec.other~h2h2h2h2"]
+
+
+def test_implements_scalar_form_rejected():
+    """implements: spec.X~h1 (scalar) is a parse error — entry rejected."""
+    content = """\
+<!-- @scry.entry
+id: design.foo~abcd1234
+kind: design
+summary: Test
+implements: spec.auth~h1h1h1h1
+@scry.entry.end -->
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 0, (
+        f"Expected entry rejected for scalar implements; got: {result.entries}"
+    )
+
+
+def test_supersedes_scalar_form_rejected():
+    """supersedes: spec.X~h1 (scalar) is a parse error — entry rejected."""
+    content = """\
+<!-- @scry.entry
+id: design.foo~abcd1234
+kind: design
+summary: Test
+supersedes: design.old~h1h1h1h1
+@scry.entry.end -->
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 0, (
+        f"Expected entry rejected for scalar supersedes; got: {result.entries}"
+    )
+
+
+def test_depends_on_array_form_ok():
+    """depends_on array form still works (no regression)."""
+    content = """\
+<!-- @scry.entry
+id: task.deploy~abcd1234
+kind: task
+summary: Deploy
+depends_on: [task.build~h1h1h1h1, task.test~h2h2h2h2]
+@scry.entry.end -->
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    e = result.entries[0]
+    assert "task.build~h1h1h1h1" in e.depends_on
+    assert "task.test~h2h2h2h2" in e.depends_on
+
+
+def test_singleton_array_form():
+    """implements: [spec.X~h1] parses as single-element list."""
+    content = """\
+<!-- @scry.entry
+id: design.foo~abcd1234
+kind: design
+summary: Test
+implements: [spec.auth~h1h1h1h1]
+@scry.entry.end -->
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    e = result.entries[0]
+    assert e.implements == ["spec.auth~h1h1h1h1"]
