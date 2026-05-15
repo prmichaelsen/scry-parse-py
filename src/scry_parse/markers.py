@@ -1,6 +1,6 @@
 """Marker parsing for scry-spec v1.0.
 
-Implements FR1-FR11. Recognizes:
+Implements FR1-FR14. Recognizes:
 - @scry.entry  (block marker — declarative knowledge entry)
 - @scry.anchor (block marker — named code location)
 - @scry.bind   (line or block marker — binding / cross-reference)
@@ -8,6 +8,9 @@ Implements FR1-FR11. Recognizes:
 Comment prefix detection uses YAML-key inference (FR1 universality).
 Block-comment styles (JSDoc /** */, C /* */, OCaml (* *), Haskell {- -},
 PowerShell <# #>, Ruby =begin/=end) work automatically — no enumeration needed.
+
+Phantom-marker exclusion: markers inside fenced code blocks, inline backtick
+code spans, and Python triple-quoted string literals are NOT indexed.
 """
 from __future__ import annotations
 
@@ -163,6 +166,146 @@ def _clean_bind_body(lines: list[str], prefix: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Inert-line detection (phantom-marker suppression)
+# ---------------------------------------------------------------------------
+
+# Markdown fenced code block opener: up to 3 leading spaces + 3+ backticks or tildes.
+# Optional info string (language tag) follows the fence characters.
+_FENCE_OPEN_RE = re.compile(r'^( {0,3})(```+|~~~+)')
+
+
+def _strip_inline_code(line: str) -> str:
+    """Remove inline backtick code spans from a line, replacing with spaces.
+
+    Handles any-length backtick runs (`, ``, ```).  An unclosed run is
+    left in place so the caller doesn't misidentify the surrounding text.
+    """
+    result = list(line)
+    i = 0
+    length = len(line)
+    while i < length:
+        if line[i] != '`':
+            i += 1
+            continue
+        # Count opening backticks
+        j = i
+        while j < length and line[j] == '`':
+            j += 1
+        tick_count = j - i
+        # Search for matching closing run
+        k = j
+        closed = False
+        while k < length:
+            if line[k] == '`':
+                m = k
+                while m < length and line[m] == '`':
+                    m += 1
+                if m - k == tick_count:
+                    # Replace entire span with spaces
+                    for p in range(i, m):
+                        result[p] = ' '
+                    i = m
+                    closed = True
+                    break
+                k = m
+            else:
+                k += 1
+        if not closed:
+            i = j  # skip past unclosed backtick run
+    return ''.join(result)
+
+
+def _scry_only_in_inline_code(line: str) -> bool:
+    """Return True if every @scry. occurrence on the line is inside backtick spans."""
+    if '@scry.' not in line:
+        return False
+    return '@scry.' not in _strip_inline_code(line)
+
+
+def _compute_inert_lines(
+    lines: list[str],
+    language: str | None = None,
+    file: str = "",
+) -> set[int]:
+    """Return the set of 0-indexed line numbers that must not be scanned for markers.
+
+    Excludes lines inside:
+    - Markdown / any-file fenced code blocks (``` or ~~~, standard CommonMark rules)
+    - Python triple-quoted strings (triggered by language='python' or .py extension)
+    - Single lines where @scry. appears only within inline backtick spans
+    """
+    inert: set[int] = set()
+    n = len(lines)
+    is_python = (language == "python") or (
+        isinstance(file, str) and file.endswith(".py")
+    )
+
+    # --- Pass 1: multi-line inert regions ---
+    i = 0
+    while i < n:
+        raw = lines[i].rstrip('\r\n')
+        found_block = False
+
+        # Markdown fenced code block
+        fence_m = _FENCE_OPEN_RE.match(raw)
+        if fence_m:
+            fence_char = fence_m.group(2)[0]  # '`' or '~'
+            fence_min = len(fence_m.group(2))
+            close_re = re.compile(
+                rf'^ {{0,3}}{re.escape(fence_char)}{{{fence_min},}}\s*$'
+            )
+            inert.add(i)
+            i += 1
+            while i < n:
+                ln = lines[i].rstrip('\r\n')
+                inert.add(i)
+                if close_re.match(ln):
+                    i += 1
+                    break
+                i += 1
+            found_block = True
+
+        # Python triple-quoted strings
+        elif is_python:
+            for quote_str in ('"""', "'''"):
+                open_idx = raw.find(quote_str)
+                if open_idx < 0:
+                    continue
+                # Check whether the string closes on the same line
+                close_idx = raw.find(quote_str, open_idx + 3)
+                if close_idx >= 0:
+                    # Single-line triple-quoted string: inert only if @scry. is inside
+                    if '@scry.' in raw[open_idx + 3: close_idx]:
+                        inert.add(i)
+                    i += 1
+                    found_block = True
+                    break
+                else:
+                    # Multi-line triple-quoted string: mark until the closing delimiter
+                    inert.add(i)
+                    i += 1
+                    while i < n:
+                        ln = lines[i].rstrip('\r\n')
+                        inert.add(i)
+                        if quote_str in ln:
+                            i += 1
+                            break
+                        i += 1
+                    found_block = True
+                    break
+
+        if not found_block:
+            i += 1
+
+    # --- Pass 2: single-line inline code spans ---
+    for j, line in enumerate(lines):
+        if j not in inert and '@scry.' in line and _scry_only_in_inline_code(line):
+            inert.add(j)
+
+    return inert
+
+
+# ---------------------------------------------------------------------------
 # Regexes
 # ---------------------------------------------------------------------------
 
@@ -233,15 +376,25 @@ def _coerce_float(value: Any) -> float | None:
 # Block-span finder
 # ---------------------------------------------------------------------------
 
-def _find_block_spans(lines: list[str]) -> list[tuple[int, int, str, str]]:
+def _find_block_spans(
+    lines: list[str],
+    inert: set[int] | None = None,
+) -> list[tuple[int, int, str, str]]:
     """Find all declarative block spans (entry, anchor).
 
     Returns list of (start_line_1idx, end_line_1idx, kind, sentinel_line).
     Lines are 1-indexed (matching span convention).
+
+    Lines in `inert` (0-indexed) are skipped when looking for open sentinels;
+    they cannot start a valid marker block.
     """
+    inert = inert or set()
     spans: list[tuple[int, int, str, str]] = []
     i = 0
     while i < len(lines):
+        if i in inert:
+            i += 1
+            continue
         line = lines[i]
         m = _BLOCK_OPEN_RE.search(line)
         if not m:
@@ -249,14 +402,16 @@ def _find_block_spans(lines: list[str]) -> list[tuple[int, int, str, str]]:
             continue
         kind = m.group(1)
         open_line_idx = i  # 0-indexed
-        # Scan forward for matching close
+        # Scan forward for matching close (inert lines are scanned but cannot be the
+        # close sentinel — a close inside a code block would be phantom content too)
         j = i + 1
         close_idx = None
         while j < len(lines):
-            cm = _BLOCK_CLOSE_RE.search(lines[j])
-            if cm and cm.group(1) == kind:
-                close_idx = j
-                break
+            if j not in inert:
+                cm = _BLOCK_CLOSE_RE.search(lines[j])
+                if cm and cm.group(1) == kind:
+                    close_idx = j
+                    break
             j += 1
         if close_idx is None:
             # Unterminated block — skip (FR: unterminated → 0 entries)
@@ -287,13 +442,20 @@ def _parse_bindings_with_prefix(
     lines: list[str],
     block_spans: list[tuple[int, int, str, str]],
     file: str,
+    inert: set[int] | None = None,
 ) -> list[BindingMarker]:
     """Parse bindings, detecting comment prefix from each bind sentinel line."""
+    inert = inert or set()
     result: list[BindingMarker] = []
     i = 0
     while i < len(lines):
         line_1idx = i + 1
         line = lines[i]
+
+        # Skip lines inside code blocks / inline code / string literals
+        if i in inert:
+            i += 1
+            continue
 
         m = _BIND_OPEN_RE.search(line)
         if not m:
@@ -444,8 +606,11 @@ def parse_markers(
 
     lines = content.splitlines(keepends=True)
 
-    # First pass: find all declarative block spans
-    block_spans = _find_block_spans(lines)
+    # Pre-compute inert line set: code blocks, inline code spans, string literals
+    inert = _compute_inert_lines(lines, language=language, file=file)
+
+    # First pass: find all declarative block spans (skips inert open sentinels)
+    block_spans = _find_block_spans(lines, inert=inert)
 
     # Second pass: parse each block (comment prefix inferred per-block)
     for start_1idx, end_1idx, kind, sentinel_line in block_spans:
@@ -464,7 +629,7 @@ def parse_markers(
             )
 
     # Third pass: parse binding markers (per-sentinel prefix detection)
-    result.bindings = _parse_bindings_with_prefix(lines, block_spans, file)
+    result.bindings = _parse_bindings_with_prefix(lines, block_spans, file, inert=inert)
 
     return result
 

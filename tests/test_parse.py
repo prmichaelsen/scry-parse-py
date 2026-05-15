@@ -1581,3 +1581,271 @@ See milestone.v1~e5f6a7b8 for completion criteria.
     assert bindings == [], (
         f"FR14 violation: {len(bindings)} binding(s) from non-formal positions"
     )
+
+
+# ---------------------------------------------------------------------------
+# Phantom-marker exclusion (v1.0.4 — code block / inline code / string literals)
+# ---------------------------------------------------------------------------
+
+def test_markdown_code_fence_entry_ignored():
+    """A complete @scry.entry...@scry.entry.end inside a fenced code block is not indexed."""
+    content = """\
+# Example
+
+Here is how to write an entry marker:
+
+```markdown
+<!-- @scry.entry
+id: design.example~a1b2c3d4
+kind: design
+summary: This is a fixture, not a real entry
+status: active
+weight: 0.5
+tags: []
+rationale: >
+  Example only
+applies: testing
+seeded_questions: []
+@scry.entry.end -->
+```
+
+The above block is just documentation.
+"""
+    result = parse_markers(content, language="markdown", file="README.md")
+    assert result.entries == [], (
+        f"Phantom entry extracted from fenced code block: {result.entries}"
+    )
+    assert result.anchors == []
+    assert result.bindings == []
+
+
+def test_markdown_code_fence_anchor_ignored():
+    """A @scry.anchor block inside a fenced code block is not indexed."""
+    content = """\
+Example anchor syntax:
+
+```
+@scry.anchor auth-check~f1e2d3c4
+description: JWT validation point
+seeded_questions:
+  - What if token is expired?
+@scry.anchor.end
+```
+"""
+    result = parse_markers(content, file="docs.md")
+    assert result.anchors == [], (
+        f"Phantom anchor extracted from fenced code block: {result.anchors}"
+    )
+
+
+def test_markdown_code_fence_bind_ignored():
+    """A @scry.bind inside a fenced code block is not indexed."""
+    content = """\
+Usage example:
+
+```python
+# @scry.bind impl~a1b2c3d4 spec.auth~b2c3d4e5#FR1
+def authenticate():
+    pass
+```
+"""
+    result = parse_markers(content, file="guide.md")
+    assert result.bindings == [], (
+        f"Phantom binding extracted from fenced code block: {result.bindings}"
+    )
+
+
+def test_markdown_tilde_fence_marker_ignored():
+    """Tilde-delimited (~~~) fenced code blocks are also excluded."""
+    content = """\
+~~~python
+# @scry.bind phantom~a1b2c3d4 design.foo~b2c3d4e5
+def func(): pass
+~~~
+"""
+    result = parse_markers(content, file="notes.md")
+    assert result.bindings == []
+
+
+def test_markdown_inline_code_entry_ignored():
+    """@scry.entry in an inline code span (`...`) is not indexed."""
+    content = """\
+Use `@scry.entry` to declare an artifact. The token `@scry.entry.end` closes it.
+
+You can also write `@scry.anchor foo~12345678` for named locations.
+And `@scry.bind local~12345678 target~abcdef01` for cross-references.
+"""
+    result = parse_markers(content, file="docs.md")
+    assert result.entries == [], (
+        f"Phantom entry from inline code span: {result.entries}"
+    )
+    assert result.anchors == [], (
+        f"Phantom anchor from inline code span: {result.anchors}"
+    )
+    assert result.bindings == [], (
+        f"Phantom binding from inline code span: {result.bindings}"
+    )
+
+
+def test_markdown_inline_double_backtick_ignored():
+    """Double-backtick inline code spans are also excluded."""
+    content = "See ``@scry.anchor foo~12345678`` for the named location pattern.\n"
+    result = parse_markers(content, file="ref.md")
+    assert result.anchors == []
+
+
+def test_python_multiline_string_literal_marker_ignored():
+    """@scry markers inside a Python triple-quoted string are not indexed."""
+    content = '''\
+# A real entry is in a comment, not a string
+# @scry.entry
+# id: design.real~a1b2c3d4
+# kind: design
+# summary: Real entry in a Python comment
+# status: active
+# weight: 0.5
+# tags: []
+# rationale: >
+#   This is the real one
+# applies: testing
+# seeded_questions: []
+# @scry.entry.end
+
+DOCSTRING_EXAMPLE = """
+@scry.entry
+id: design.phantom~deadbeef
+kind: design
+summary: This is inside a string literal and should NOT be indexed
+status: active
+weight: 0.5
+tags: []
+rationale: >
+  Phantom
+applies: testing
+seeded_questions: []
+@scry.entry.end
+"""
+'''
+    result = parse_markers(content, language="python", file="example.py")
+    # The real entry (in the comment) should be found
+    assert len(result.entries) == 1, (
+        f"Expected 1 real entry, got {len(result.entries)}: "
+        + str([e.id for e in result.entries])
+    )
+    assert result.entries[0].id == "design.real~a1b2c3d4"
+    # No phantom entries from the string literal
+    assert all(e.id != "design.phantom~deadbeef" for e in result.entries)
+
+
+def test_python_multiline_string_bind_ignored():
+    """@scry.bind inside a Python triple-quoted string is not indexed."""
+    content = '''\
+EXAMPLE = """
+# @scry.bind impl~a1b2c3d4 spec.foo~b2c3d4e5
+"""
+
+# @scry.bind real~a1b2c3d4 spec.foo~b2c3d4e5
+def do_thing():
+    pass
+'''
+    result = parse_markers(content, language="python", file="thing.py")
+    assert len(result.bindings) == 1, (
+        f"Expected 1 real binding (not phantom), got {len(result.bindings)}"
+    )
+    assert result.bindings[0].local_id == "real~a1b2c3d4"
+
+
+def test_python_singlequote_multiline_string_ignored():
+    """Triple single-quoted Python strings are excluded too."""
+    content = """\
+x = '''
+@scry.anchor phantom~a1b2c3d4
+description: inside triple single-quote
+seeded_questions: []
+@scry.anchor.end
+'''
+"""
+    result = parse_markers(content, language="python", file="x.py")
+    assert result.anchors == [], (
+        f"Phantom anchor from triple-single-quote string: {result.anchors}"
+    )
+
+
+def test_real_marker_after_fenced_block_still_parsed():
+    """A real marker following a fenced block is still indexed correctly."""
+    content = """\
+```python
+# @scry.bind phantom~a1b2c3d4 spec.foo~b2c3d4e5
+```
+
+<!-- @scry.entry
+id: design.real~a1b2c3d4
+kind: design
+summary: Real entry after the fence
+status: active
+weight: 0.5
+tags: []
+rationale: >
+  Should still be found
+applies: testing
+seeded_questions: []
+@scry.entry.end -->
+"""
+    result = parse_markers(content, file="mixed.md")
+    assert len(result.entries) == 1, (
+        f"Real entry after fence not found: {result.entries}"
+    )
+    assert result.entries[0].id == "design.real~a1b2c3d4"
+    assert result.bindings == []
+
+
+def test_real_marker_before_fenced_block_still_parsed():
+    """A real marker before a fenced block is indexed; the fenced content is not."""
+    content = """\
+<!-- @scry.entry
+id: design.before~a1b2c3d4
+kind: design
+summary: Entry before the fence
+status: active
+weight: 0.5
+tags: []
+rationale: >
+  Should be found
+applies: testing
+seeded_questions: []
+@scry.entry.end -->
+
+```markdown
+<!-- @scry.entry
+id: design.phantom~deadbeef
+kind: design
+summary: Inside a fence, should NOT be indexed
+status: active
+weight: 0.5
+tags: []
+rationale: >
+  Phantom
+applies: testing
+seeded_questions: []
+@scry.entry.end -->
+```
+"""
+    result = parse_markers(content, file="mixed.md")
+    assert len(result.entries) == 1
+    assert result.entries[0].id == "design.before~a1b2c3d4"
+
+
+def test_ts_test_fixture_style_phantom_anchor_ignored():
+    """Markers inside TypeScript string literals (common in test fixtures) are excluded.
+
+    Regression test: phantom anchors named like '","', '`"', '`,'
+    were appearing from scry-parse-ts test fixture content parsed by scry-mcp.
+    The TypeScript fixtures use inline code or string content to test the parser.
+    This test covers the inline-code-span exclusion path.
+    """
+    # Inline-code span containing marker syntax
+    content = 'describe("anchor", () => { it("parses `@scry.anchor foo~12345678`", () => {}); });\n'
+    result = parse_markers(content, file="markers.test.ts")
+    assert result.anchors == [], (
+        f"Phantom anchor from TS inline code: {result.anchors}"
+    )

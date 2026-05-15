@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-05-15
+
+### Fixed
+
+- **Phantom-marker suppression** — markers inside the following contexts are no
+  longer indexed:
+  - Markdown / text fenced code blocks (`` ``` `` and `~~~`, any language tag,
+    CommonMark indent rules)
+  - Inline backtick code spans (single, double, or triple backticks) on any
+    single line
+  - Python triple-quoted string literals (`"""…"""` and `'''…'''`, both
+    single-line and multi-line; activated by `language='python'` hint or `.py`
+    file extension)
+- Root cause: the parser was scanning all lines for `@scry.*` tokens without
+  regard for whether those lines were inside documentation examples, test
+  fixtures, or language string literals. This produced phantom rows in the
+  `scry__anchor` and `scry__doc` tables from test files and spec documentation.
+- 12 regression tests added covering fenced blocks, inline code spans, Python
+  string literals, and mixed real+phantom scenarios.
+
+---
+
 ## [1.0.3] - 2026-05-14
 
 ### Added
