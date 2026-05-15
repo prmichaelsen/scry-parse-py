@@ -1,6 +1,6 @@
 # scry-parse
 
-Python parser for the [scry-spec](https://github.com/prmichaelsen/scry-spec) marker format. Conformant with scry-spec v1.0.3.
+Python parser for the [scry-spec](https://github.com/prmichaelsen/scry-spec) marker format. Conformant with scry-spec v1.0.5.
 
 ## Install
 
