@@ -41,4 +41,4 @@ __all__ = [
     "BASELINE_STATUSES",
 ]
 
-__version__ = "1.0.4"
+__version__ = "1.0.5"
