@@ -2078,3 +2078,131 @@ def test_fr11_6_c_style_block_comment_closer_stripped_from_bind_comment():
     assert b.comment == "partial impl, OAuth pending", (
         f"Expected comment without trailing */, got: {b.comment!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# FR4.B (scry-spec v1.1.0): extras field
+# ---------------------------------------------------------------------------
+
+# A reusable minimal entry body with a swappable `extras` block. Tests below
+# format this template with their per-case extras YAML fragment.
+_EXTRAS_ENTRY_TEMPLATE = """\
+<!-- @scry.entry
+id: deliverable.intake-page~a1b2c3d4
+kind: report
+status: active
+weight: 0.5
+summary: intake page shipped
+{extras_block}@scry.entry.end -->
+"""
+
+
+def _entry_with_extras(extras_yaml: str) -> str:
+    """Build an entry-marker content string with the given extras YAML fragment.
+
+    `extras_yaml` is the literal text to splice as the value of `extras:`,
+    e.g. "{cost_usd: 0.42, wakes: 1}" or a multi-line block.
+    """
+    block = f"extras: {extras_yaml}\n" if extras_yaml is not None else ""
+    return _EXTRAS_ENTRY_TEMPLATE.format(extras_block=block)
+
+
+def test_fr4b_extras_absent_is_none():
+    """extras unset → EntryMarker.extras is None (backward compat with v1.0)."""
+    result = parse_markers(_entry_with_extras(None))
+    assert len(result.entries) == 1
+    e = result.entries[0]
+    assert e.extras is None
+
+
+def test_fr4b_extras_flat_map_preserved_structurally():
+    """extras: {k: v, ...} → preserved as dict (not stringified)."""
+    content = _entry_with_extras(
+        '{cost_usd: 0.42, wakes: 1, model: "opus-4.7", converged: true, note: null}'
+    )
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    e = result.entries[0]
+    assert isinstance(e.extras, dict)
+    assert e.extras == {
+        "cost_usd": 0.42,
+        "wakes": 1,
+        "model": "opus-4.7",
+        "converged": True,
+        "note": None,
+    }
+
+
+def test_fr4b_extras_conformant_validates_clean():
+    """A flat scalar-only extras within size cap emits no warnings."""
+    content = _entry_with_extras('{cost_usd: 0.42, wakes: 1, model: "opus-4.7"}')
+    result = parse_markers(content)
+    v = validate_marker(result.entries[0])
+    assert v.valid
+    extras_warnings = [w for w in v.warnings if "extras" in w]
+    assert extras_warnings == [], extras_warnings
+
+
+def test_fr4b_extras_empty_map_warns():
+    """SHOULD-diagnostic: extras: {} emits one warning."""
+    content = _entry_with_extras("{}")
+    result = parse_markers(content)
+    e = result.entries[0]
+    assert e.extras == {}
+    v = validate_marker(e)
+    assert v.valid  # empty extras is a warning, not an error
+    assert any("empty" in w for w in v.warnings), v.warnings
+
+
+def test_fr4b_extras_nested_map_warns_per_key():
+    """Nested map value is non-conformant in v1.1; warn per offending key."""
+    content = _entry_with_extras("{cost: {usd: 0.42, eur: 0.39}, wakes: 1}")
+    result = parse_markers(content)
+    e = result.entries[0]
+    # Structure is preserved even when non-conformant.
+    assert e.extras == {"cost": {"usd": 0.42, "eur": 0.39}, "wakes": 1}
+    v = validate_marker(e)
+    nested = [w for w in v.warnings if "nested map" in w and "cost" in w]
+    assert len(nested) == 1, v.warnings
+
+
+def test_fr4b_extras_list_value_warns():
+    """List value is non-conformant in v1.1."""
+    content = _entry_with_extras('{models: ["opus", "sonnet"]}')
+    result = parse_markers(content)
+    e = result.entries[0]
+    assert e.extras == {"models": ["opus", "sonnet"]}
+    v = validate_marker(e)
+    assert any("list" in w and "models" in w for w in v.warnings), v.warnings
+
+
+def test_fr4b_extras_oversize_warns_and_does_not_truncate():
+    """Serialized extras > 4 KB triggers a size warning; payload preserved intact."""
+    # Each key/value pair "kNNNN: 'xxxxx...'" is ~ 30-40 bytes serialized.
+    # Build well over 4 KB.
+    big_value = "x" * 200
+    extras_yaml = "{" + ", ".join(f"k{i}: '{big_value}'" for i in range(40)) + "}"
+    content = _entry_with_extras(extras_yaml)
+    result = parse_markers(content)
+    e = result.entries[0]
+    # MUST NOT silently truncate — every key survives the parse.
+    assert isinstance(e.extras, dict)
+    assert len(e.extras) == 40
+    assert all(e.extras[f"k{i}"] == big_value for i in range(40))
+    v = validate_marker(e)
+    size_warnings = [w for w in v.warnings if "size" in w and "4 KB" in w]
+    assert len(size_warnings) == 1, v.warnings
+
+
+def test_fr4b_extras_non_mapping_at_top_level_dropped_to_none():
+    """`extras: foo` (scalar at top level) is dropped to None — spec requires mapping."""
+    content = _entry_with_extras('"just-a-string"')
+    result = parse_markers(content)
+    e = result.entries[0]
+    assert e.extras is None
+
+
+def test_fr4b_extras_size_cap_constant_exported():
+    """EXTRAS_SIZE_CAP_BYTES is part of the public API at the v1.1 spec value."""
+    from scry_parse import EXTRAS_SIZE_CAP_BYTES
+    assert EXTRAS_SIZE_CAP_BYTES == 4096

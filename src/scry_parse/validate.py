@@ -1,7 +1,9 @@
-"""Validation for parsed scry markers per scry-spec v1.0."""
+"""Validation for parsed scry markers per scry-spec v1.1."""
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+import yaml
 
 from scry_parse.consts import (
     ID_REGEX,
@@ -10,6 +12,9 @@ from scry_parse.consts import (
     BASELINE_STATUSES,
 )
 from scry_parse.markers import EntryMarker, AnchorMarker, BindingMarker
+
+# FR4.B (scry-spec v1.1.0): serialized `extras` value MUST NOT exceed 4 KB.
+EXTRAS_SIZE_CAP_BYTES = 4096
 
 
 @dataclass
@@ -71,8 +76,72 @@ def _validate_entry(marker: EntryMarker) -> ValidationResult:
             f"expected one of: {', '.join(BASELINE_STATUSES)}"
         )
 
+    # FR4.B (scry-spec v1.1.0): extras field diagnostics.
+    if marker.extras is not None:
+        warnings.extend(_extras_warnings(marker.extras))
+
     valid = len(errors) == 0
     return ValidationResult(valid=valid, errors=errors, warnings=warnings)
+
+
+def _extras_warnings(extras: dict) -> list[str]:
+    """Return SHOULD-level diagnostics for an extras payload per FR4.B.
+
+    - Empty mapping (`{}`): authoring slip — declaring the field with no
+      data carries no value.
+    - Non-scalar values (nested dict, list at any depth-1 slot): violates
+      the v1.1 flat-map constraint. Reported per-key so an author sees
+      which slot is wrong, not just that something is.
+    - Serialized size exceeds the 4 KB cap.
+
+    All diagnostics are warnings, never errors — parsers MUST preserve the
+    payload structurally regardless (the indexer is the layer that decides
+    whether to reject, per FR4.B's MAY-reject clause).
+    """
+    out: list[str] = []
+    if len(extras) == 0:
+        out.append(
+            "extras is declared but empty ({}); FR4.B SHOULD-diagnostic — "
+            "either populate or remove the field"
+        )
+        # Even empty maps get the size check (it'll pass) for symmetry; skip.
+        return out
+
+    for key, value in extras.items():
+        if isinstance(value, dict):
+            out.append(
+                f"extras[{key!r}] is a nested map; FR4.B v1.1 permits only "
+                "scalar values (string, number, boolean, null) — nesting is "
+                "non-conformant"
+            )
+        elif isinstance(value, list):
+            out.append(
+                f"extras[{key!r}] is a list; FR4.B v1.1 permits only scalar "
+                "values (string, number, boolean, null) — list values are "
+                "non-conformant"
+            )
+
+    # Size check uses YAML serialization of the extras mapping alone, matching
+    # the spec wording "serialized form of an individual marker's extras value
+    # ... when YAML-encoded".
+    try:
+        serialized = yaml.safe_dump(
+            extras,
+            default_flow_style=False,
+            sort_keys=False,
+            allow_unicode=True,
+        )
+    except yaml.YAMLError:
+        serialized = ""
+    size_bytes = len(serialized.encode("utf-8"))
+    if size_bytes > EXTRAS_SIZE_CAP_BYTES:
+        out.append(
+            f"extras serialized size is {size_bytes} bytes, exceeds the "
+            f"FR4.B 4 KB cap ({EXTRAS_SIZE_CAP_BYTES} bytes); parsers MUST "
+            "NOT truncate — consumers MAY reject"
+        )
+
+    return out
 
 
 def _validate_anchor(marker: AnchorMarker) -> ValidationResult:

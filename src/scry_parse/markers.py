@@ -41,6 +41,11 @@ class EntryMarker:
     supersedes: list[str]
     file: str
     span: tuple[int, int]  # (start_line, end_line) 1-indexed
+    # FR4.B (scry-spec v1.1.0): structured metadata. None when absent.
+    # When present, MUST be a YAML mapping per spec — preserved as a dict.
+    # The parser preserves whatever shape was authored; validation surfaces
+    # non-conformance as warnings (nested maps/lists, empty, oversize).
+    extras: dict[str, Any] | None = None
 
 
 @dataclass
@@ -778,6 +783,14 @@ def _parse_entry_block(
         # Scalar relationship field is a hard parse error (FR11.4) — skip entry
         return
 
+    # FR4.B (scry-spec v1.1.0): preserve `extras` structurally if present.
+    # Only top-level mappings round-trip; a non-mapping authored at top level
+    # (e.g. `extras: foo` or `extras: [a, b]`) is dropped to None — top-level
+    # shape is a hard spec requirement and silently coercing it would mask
+    # the author error rather than surface it on the next edit pass.
+    raw_extras = data.get("extras")
+    extras: dict[str, Any] | None = raw_extras if isinstance(raw_extras, dict) else None
+
     result.entries.append(EntryMarker(
         id=marker_id,
         kind=kind,
@@ -793,4 +806,5 @@ def _parse_entry_block(
         supersedes=supersedes,
         file=file,
         span=span,
+        extras=extras,
     ))

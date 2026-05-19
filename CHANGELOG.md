@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-05-19
+
+### Added
+
+- **FR4.B (scry-spec v1.1.0): `extras` field on `@scry.entry` markers.**
+  - `EntryMarker.extras: dict[str, Any] | None` — optional structured
+    metadata, preserved as a dict (not stringified). `None` when the
+    field is absent (backward compatible with v1.0 markers).
+  - Non-mapping top-level value (`extras: foo`, `extras: [a, b]`) is
+    dropped to `None` — top-level shape is a hard FR4.B requirement.
+  - `validate_marker` emits SHOULD-level diagnostics:
+    - empty mapping (`{}`),
+    - nested-map or list value at any depth-1 slot,
+    - serialized size exceeds the 4 KB cap (`EXTRAS_SIZE_CAP_BYTES`).
+  - **MUST NOT silently truncate** oversize payloads — the dict is
+    preserved intact; the size warning is the consumer's signal.
+  - New public constant `EXTRAS_SIZE_CAP_BYTES = 4096`.
+  - 9 new tests (115/115 total pass).
+
+### Changed
+
+- README spec-conformance line: `v1.0.5` → `v1.1.0 (FR4.B Extras Field)`.
+- `pyproject.toml` description updated for v1.1 scope.
+
+### Backward compatibility
+
+Additive. Markers without `extras` parse identically to v1.0.x.
+Existing `EntryMarker` keyword construction is unchanged; `extras`
+defaults to `None`.
+
+---
+
 ## [1.0.10] - 2026-05-15
 
 ### Changed

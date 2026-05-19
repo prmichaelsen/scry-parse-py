@@ -1,6 +1,6 @@
 # scry-parse
 
-Python parser for the [scry-spec](https://github.com/prmichaelsen/scry-spec) marker format. Conformant with scry-spec v1.0.5.
+Python parser for the [scry-spec](https://github.com/prmichaelsen/scry-spec) marker format. Conformant with scry-spec v1.1.0 (FR4.B Extras Field).
 
 ## Install
 
@@ -20,6 +20,7 @@ from scry_parse import (
     mint_id,
     BASELINE_KINDS,
     BASELINE_STATUSES,
+    EXTRAS_SIZE_CAP_BYTES,  # FR4.B (v1.1.0)
 )
 
 # Parse markers from file content
@@ -107,14 +108,15 @@ Example JSDoc marker:
 | `mint_id(kind, name, content=None)` | Generate a spec-conformant marker ID. |
 | `BASELINE_KINDS` | Tuple of standard kind values from scry-spec v1.0. |
 | `BASELINE_STATUSES` | Tuple of standard status values (`draft`, `active`, `deprecated`). |
+| `EXTRAS_SIZE_CAP_BYTES` | FR4.B v1.1.0 size cap (4096) for serialized `extras` payload. |
 
 ### Dataclasses
 
 - **`ParseResult`** — `entries: list[EntryMarker]`, `anchors: list[AnchorMarker]`, `bindings: list[BindingMarker]`, `markers` property (all three combined)
-- **`EntryMarker`** — `id`, `kind`, `summary`, `status`, `weight`, `tags`, `rationale`, `applies`, `seeded_questions`, `depends_on`, `implements`, `supersedes`, `file`, `span`
+- **`EntryMarker`** — `id`, `kind`, `summary`, `status`, `weight`, `tags`, `rationale`, `applies`, `seeded_questions`, `depends_on`, `implements`, `supersedes`, `file`, `span`, `extras` (FR4.B v1.1.0; `dict[str, Any] | None`, preserved structurally)
 - **`AnchorMarker`** — `name`, `description`, `seeded_questions`, `file`, `span`
 - **`BindingMarker`** — `local_id`, `ref`, `comment`, `file`, `offset`, `span`
-- **`ValidationResult`** — `valid`, `errors`, `warnings`
+- **`ValidationResult`** — `valid`, `errors`, `warnings` (FR4.B SHOULD-diagnostics for `extras`: empty map, nested/list value, oversize)
 
 ## License
 
