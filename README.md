@@ -1,6 +1,6 @@
 # scry-parse
 
-Python parser for the [scry-spec](https://github.com/prmichaelsen/scry-spec) marker format. Conformant with scry-spec v1.1.1 (framing patch over v1.1.0 FR4.B Extras Field — no normative changes).
+Python parser for the [scry-spec](https://github.com/prmichaelsen/scry-spec) marker format. Conformant with scry-spec v1.1.2 (non-normative addition over v1.1.1 — no parser-relevant changes; the v1.1.2 "Recommended Operating Discipline" section binds consumer agents and tool-instruction surfaces, not parsers).
 
 ## Install
 

@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Spec conformance declared as scry-spec v1.1.2** (non-normative
+  addition shipped on the spec repo at tag `v1.1.2`, commit `505eab5`).
+  v1.1.2 adds a "Recommended Operating Discipline" section — five
+  named disciplines (D1 orient by scry, D2 search for a prior lesson,
+  D3 mark every artifact, D4 author marker fields for query shapes,
+  D5 use bindings) and a Canonical Minimal Form intended for verbatim
+  embedding in consumer-facing tool-instruction surfaces (MCP server
+  `instructions` fields, CLI help text, agent-SDK system prompts).
+  The section explicitly carries no conformance requirement for
+  parsers — v1.1.0 / v1.1.1 parsers are fully v1.1.2 conformant.
+  scry-parse is a parser library and exposes no tool-instruction
+  surface, so this addition imposes no code change. README
+  spec-conformance line updated; no package version bump.
+
 - **Spec conformance declared as scry-spec v1.1.1** (framing patch
   shipped on the spec repo at tag `v1.1.1`, commit `884d38f`). Two
   non-normative changes: the spec Overview now presents discovery/recall
