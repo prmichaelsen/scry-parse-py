@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-09-21
+
+### Added
+
+- **FR12: `satisfies` predicate field on `EntryMarker`** (scry-spec v1.2.0).
+  `EntryMarker.satisfies` is a `list[str]` of scry IDs that this artifact
+  satisfies (e.g. goals). Parsed with the same strict-array enforcement as
+  `implements` / `supersedes` / `depends_on`: a scalar value rejects the
+  entry. Absent field defaults to `[]`. Adds 3 new tests
+  (`test_satisfies_array_form_ok`, `test_satisfies_scalar_form_rejected`,
+  `test_satisfies_absent_is_empty_list`). 118/118 tests pass.
+
 ## [Unreleased]
 
 ### Changed

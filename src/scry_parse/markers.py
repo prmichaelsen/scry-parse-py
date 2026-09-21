@@ -41,6 +41,11 @@ class EntryMarker:
     supersedes: list[str]
     file: str
     span: tuple[int, int]  # (start_line, end_line) 1-indexed
+    # FR12 (scry-spec v1.2.0): `satisfies` typed-edge predicate — array of
+    # scry IDs that this deliverable satisfies (e.g. goals).  Same strict-array
+    # enforcement as implements/supersedes: a scalar value rejects the entry.
+    # Default [] for backward compatibility — absent field = satisfies no goals.
+    satisfies: list[str] = field(default_factory=list)
     # FR4.B (scry-spec v1.1.0): structured metadata. None when absent.
     # When present, MUST be a YAML mapping per spec — preserved as a dict.
     # The parser preserves whatever shape was authored; validation surfaces
@@ -779,8 +784,9 @@ def _parse_entry_block(
     depends_on, dep_ok = _strict_array(data.get("depends_on"))
     implements, impl_ok = _strict_array(data.get("implements"))
     supersedes, sup_ok = _strict_array(data.get("supersedes"))
-    if not dep_ok or not impl_ok or not sup_ok:
-        # Scalar relationship field is a hard parse error (FR11.4) — skip entry
+    satisfies, sat_ok = _strict_array(data.get("satisfies"))
+    if not dep_ok or not impl_ok or not sup_ok or not sat_ok:
+        # Scalar relationship field is a hard parse error (FR11.4/FR12) — skip entry
         return
 
     # FR4.B (scry-spec v1.1.0): preserve `extras` structurally if present.
@@ -804,6 +810,7 @@ def _parse_entry_block(
         depends_on=depends_on,
         implements=implements,
         supersedes=supersedes,
+        satisfies=satisfies,
         file=file,
         span=span,
         extras=extras,

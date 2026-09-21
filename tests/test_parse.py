@@ -2206,3 +2206,54 @@ def test_fr4b_extras_size_cap_constant_exported():
     """EXTRAS_SIZE_CAP_BYTES is part of the public API at the v1.1 spec value."""
     from scry_parse import EXTRAS_SIZE_CAP_BYTES
     assert EXTRAS_SIZE_CAP_BYTES == 4096
+
+
+# ---------------------------------------------------------------------------
+# FR12 — satisfies predicate (scry-spec v1.2.0)
+# ---------------------------------------------------------------------------
+
+def test_satisfies_array_form_ok():
+    """satisfies: [goal.X~h1, goal.Y~h2] parses as list."""
+    content = """\
+<!-- @scry.entry
+id: design.foo~abcd1234
+kind: design
+summary: Test
+satisfies: [goal.growth~h1h1h1h1, goal.profit~h2h2h2h2]
+@scry.entry.end -->
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    e = result.entries[0]
+    assert e.satisfies == ["goal.growth~h1h1h1h1", "goal.profit~h2h2h2h2"]
+
+
+def test_satisfies_scalar_form_rejected():
+    """satisfies: goal.X~h1 (scalar) is a parse error — entry rejected (FR12)."""
+    content = """\
+<!-- @scry.entry
+id: design.foo~abcd1234
+kind: design
+summary: Test
+satisfies: goal.growth~h1h1h1h1
+@scry.entry.end -->
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 0, (
+        f"Expected entry rejected for scalar satisfies; got: {result.entries}"
+    )
+
+
+def test_satisfies_absent_is_empty_list():
+    """satisfies absent → defaults to empty list (no satisfies field → [])."""
+    content = """\
+<!-- @scry.entry
+id: design.foo~abcd1234
+kind: design
+summary: Test
+@scry.entry.end -->
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    e = result.entries[0]
+    assert e.satisfies == []
