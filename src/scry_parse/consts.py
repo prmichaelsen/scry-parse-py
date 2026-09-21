@@ -1,4 +1,4 @@
-"""Constants for scry-spec v1.0: baseline kinds, statuses, and ID regexes."""
+"""Constants for scry-spec v1.2: baseline kinds, statuses, and ID regexes."""
 import re
 
 BASELINE_KINDS = (
@@ -6,6 +6,7 @@ BASELINE_KINDS = (
     "task", "milestone",
     "report", "audit", "research",
     "code",
+    "goal",  # scry-spec v1.2.0 FR8 — declares an objective
 )
 
 BASELINE_STATUSES = ("draft", "active", "deprecated")

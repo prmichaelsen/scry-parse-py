@@ -717,10 +717,12 @@ def test_validate_binding_empty_ref():
 # consts tests
 # ---------------------------------------------------------------------------
 
-def test_baseline_kinds_contains_all_v1_kinds():
+def test_baseline_kinds_contains_all_v12_kinds():
+    """BASELINE_KINDS must contain all scry-spec v1.2 kinds (v1.0 set + goal)."""
     expected = {
         "design", "pattern", "spec", "lesson", "internal",
-        "task", "milestone", "report", "audit", "research", "code"
+        "task", "milestone", "report", "audit", "research", "code",
+        "goal",  # scry-spec v1.2.0 FR8
     }
     assert set(BASELINE_KINDS) == expected
 
@@ -2257,3 +2259,107 @@ summary: Test
     assert len(result.entries) == 1
     e = result.entries[0]
     assert e.satisfies == []
+
+
+# ---------------------------------------------------------------------------
+# scry-spec v1.2.0 — kind=goal baseline recognition + INV-GOAL-COMPLETION
+# ---------------------------------------------------------------------------
+
+def test_goal_kind_is_baseline_kind():
+    """kind=goal is a scry-spec v1.2.0 baseline kind — validator MUST NOT warn."""
+    content = """\
+<!-- @scry.entry
+id: goal.reduce-churn~abcd1234
+kind: goal
+summary: Reduce monthly churn to below 2% by end of Q4.
+status: active
+weight: 0.8
+@scry.entry.end -->
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1
+    e = result.entries[0]
+    assert e.kind == "goal"
+    vr = validate_marker(e)
+    assert vr.valid is True
+    kind_warnings = [w for w in vr.warnings if "kind" in w.lower() and "goal" in w.lower()]
+    assert not kind_warnings, (
+        f"validate_marker emitted unexpected kind warning for kind=goal: {kind_warnings}"
+    )
+
+
+def test_inv_goal_completion_met_is_error():
+    """INV-GOAL-COMPLETION: status=met on kind=goal MUST be rejected as an error."""
+    content = """\
+<!-- @scry.entry
+id: goal.reduce-churn~abcd1234
+kind: goal
+summary: Reduce monthly churn to below 2% by end of Q4.
+status: met
+weight: 0.8
+@scry.entry.end -->
+"""
+    result = parse_markers(content)
+    assert len(result.entries) == 1, "Entry should still parse (parse != validate)"
+    e = result.entries[0]
+    assert e.kind == "goal"
+    assert e.status == "met"
+    vr = validate_marker(e)
+    assert vr.valid is False, (
+        "validate_marker should return valid=False for kind=goal status=met "
+        "(INV-GOAL-COMPLETION)"
+    )
+    inv_errors = [err for err in vr.errors if "INV-GOAL-COMPLETION" in err]
+    assert inv_errors, (
+        f"Expected an INV-GOAL-COMPLETION error; got errors: {vr.errors}"
+    )
+    # The redundant "status 'met' not in baseline" warning should be suppressed
+    redundant_warnings = [w for w in vr.warnings if "met" in w and "baseline" in w]
+    assert not redundant_warnings, (
+        f"Redundant 'met not in baseline' warning should be suppressed when "
+        f"INV-GOAL-COMPLETION fires; got: {redundant_warnings}"
+    )
+
+
+def test_inv_goal_completion_abandoned_is_ok():
+    """status=abandoned on kind=goal is valid — only terminal author-writable status."""
+    content = """\
+<!-- @scry.entry
+id: goal.reduce-churn~abcd1234
+kind: goal
+summary: Reduce monthly churn.
+status: active
+weight: 0.5
+@scry.entry.end -->
+"""
+    result = parse_markers(content)
+    e = result.entries[0]
+    vr = validate_marker(e)
+    assert vr.valid is True
+    assert not any("INV-GOAL-COMPLETION" in w for w in vr.errors)
+
+
+def test_inv_goal_completion_only_fires_on_goal_kind():
+    """status=met on a non-goal kind is a warning (unknown status), not INV error."""
+    content = """\
+<!-- @scry.entry
+id: design.foo~abcd1234
+kind: design
+summary: Some design doc.
+status: met
+weight: 0.5
+@scry.entry.end -->
+"""
+    result = parse_markers(content)
+    e = result.entries[0]
+    vr = validate_marker(e)
+    # No INV-GOAL-COMPLETION error (kind != goal)
+    inv_errors = [err for err in vr.errors if "INV-GOAL-COMPLETION" in err]
+    assert not inv_errors, (
+        f"INV-GOAL-COMPLETION should only fire on kind=goal; got: {inv_errors}"
+    )
+    # But status=met IS an unknown status warning for non-goal kinds
+    status_warnings = [w for w in vr.warnings if "met" in w]
+    assert status_warnings, (
+        "Expected a 'met not in baseline statuses' warning for kind=design status=met"
+    )

@@ -1,4 +1,4 @@
-"""Validation for parsed scry markers per scry-spec v1.1."""
+"""Validation for parsed scry markers per scry-spec v1.2."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -67,10 +67,27 @@ def _validate_entry(marker: EntryMarker) -> ValidationResult:
     if not marker.summary or not marker.summary.strip():
         errors.append("summary must be non-empty")
 
+    # INV-GOAL-COMPLETION (scry-spec v1.2.0): status: met MUST NOT be hand-set
+    # on kind: goal markers.  Met-ness is computed from the deliverable set;
+    # "abandoned" is the only valid terminal status an author may write on a
+    # goal marker.  Validators MUST reject any marker with kind=goal +
+    # status=met.
+    if marker.kind == "goal" and marker.status == "met":
+        errors.append(
+            "INV-GOAL-COMPLETION (scry-spec v1.2.0): status 'met' must not "
+            "be set on a kind=goal marker — met-ness is computed from the "
+            "deliverable set, never declared. Use 'abandoned' to close a goal."
+        )
+
     # status must be non-empty; warn if not in BASELINE_STATUSES
     if not marker.status or not marker.status.strip():
         errors.append("status must be a non-empty string")
-    elif marker.status not in BASELINE_STATUSES:
+    elif marker.status not in BASELINE_STATUSES and not (
+        marker.kind == "goal" and marker.status == "met"
+    ):
+        # status:met on kind:goal is already an error (INV-GOAL-COMPLETION
+        # above); suppress the redundant "not in baseline statuses" warning
+        # to keep diagnostic output clean.
         warnings.append(
             f"status {marker.status!r} is not in the baseline statuses list; "
             f"expected one of: {', '.join(BASELINE_STATUSES)}"

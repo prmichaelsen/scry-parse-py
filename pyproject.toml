@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scry-parse"
-version = "1.2.0"
+version = "1.2.1"
 description = "Python parser for scry-spec v1.2 markers"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -22,3 +22,10 @@ packages = ["src/scry_parse"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "anyio>=4.15.1",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",
+]

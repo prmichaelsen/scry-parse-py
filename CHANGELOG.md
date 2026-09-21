@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-09-21
+
+### Fixed
+
+- **`kind: goal` added to `BASELINE_KINDS`** (scry-spec v1.2.0 FR8).
+  v1.2.0 added `goal` to the spec's baseline kind enumeration but
+  `consts.py` was not updated. `validate_marker` now correctly
+  recognizes `kind: goal` without emitting a "not in baseline kinds"
+  warning.
+
+- **INV-GOAL-COMPLETION enforced in `validate_marker`** (scry-spec
+  v1.2.0). `status: met` on a `kind: goal` marker now produces
+  `valid=False` with an explicit `INV-GOAL-COMPLETION` error.
+  Met-ness is computed from the deliverable set, never declared.
+  The redundant "status 'met' not in baseline statuses" warning is
+  suppressed when the INV error fires.
+
+- **Module docstrings** updated from v1.0/v1.1 to v1.2 in `consts.py`
+  and `validate.py`.
+
+- **122/122 tests pass** (4 new tests for goal kind and
+  INV-GOAL-COMPLETION).
+
 ## [1.2.0] - 2026-09-21
 
 ### Added
